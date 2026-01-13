@@ -74,9 +74,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
              </button>
              <button 
                 onClick={onTriggerAlert}
-                className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-1.5 rounded text-sm font-bold shadow-lg shadow-orange-900/20 active:scale-95 transition-all"
+                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded text-sm font-bold shadow-lg shadow-blue-900/20 active:scale-95 transition-all flex items-center gap-2"
              >
-                警告
+                <span>🔔</span>
+                呼出し
              </button>
              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold">A</div>
         </div>

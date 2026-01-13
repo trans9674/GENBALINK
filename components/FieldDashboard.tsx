@@ -94,12 +94,53 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
     }
   }, [adminStream]);
 
+  // Handle Alert Sound & Visuals
   useEffect(() => {
-    if (incomingAlert && ecoMode) {
-      setEcoMode(false);
-      onClearAlert();
+    if (incomingAlert) {
+      // 1. EcoMode解除
+      if (ecoMode) {
+        setEcoMode(false);
+      }
+
+      // 2. Play Chime Sound (Ding-Dong-Dang-Dong)
+      try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContext) {
+          const ctx = new AudioContext();
+          
+          const playTone = (freq: number, time: number, duration: number) => {
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              
+              osc.type = 'sine'; // Sine wave for chime
+              osc.frequency.setValueAtTime(freq, time);
+              
+              // Envelope
+              gain.gain.setValueAtTime(0, time);
+              gain.gain.linearRampToValueAtTime(0.5, time + 0.05);
+              gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
+              
+              osc.start(time);
+              osc.stop(time + duration);
+          };
+
+          const now = ctx.currentTime;
+          // Chime melody: E5, C5, G5, C6 (classic 4-note chime)
+          // E5 = 659.25, C5 = 523.25, G5 = 783.99, C6 = 1046.50
+          playTone(660, now, 0.6);
+          playTone(523, now + 0.5, 0.6);
+          playTone(784, now + 1.0, 0.6);
+          playTone(1046, now + 1.5, 1.2);
+
+        }
+      } catch (e) {
+        console.error("Audio playback failed", e);
+      }
     }
-  }, [incomingAlert, ecoMode, onClearAlert]);
+  }, [incomingAlert, ecoMode]);
 
   if (ecoMode) {
     return (
@@ -112,7 +153,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
         <div className="mt-8 text-sm text-green-900">{siteId} 監視中</div>
         <div className="mt-2 text-xs text-green-800">通信状態: {connectionStatus}</div>
         <div className="absolute bottom-10 animate-bounce">
-            {incomingAlert ? "⚠️ 緊急アラート着信" : "システム正常"}
+            {incomingAlert ? "🔔 管理者からの呼出し" : "システム正常"}
         </div>
       </div>
     );
@@ -176,6 +217,16 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                             className="w-full h-full object-cover"
                         />
                         <div className="absolute bottom-0 left-0 w-full bg-blue-600/80 text-white text-[10px] text-center">管理者</div>
+                    </div>
+                )}
+                
+                {/* Visual Alert Overlay (Calling) */}
+                {incomingAlert && (
+                    <div className="absolute inset-0 z-50 pointer-events-none border-[12px] border-blue-500/80 animate-pulse flex items-center justify-center bg-blue-900/20">
+                        <div className="bg-blue-600 text-white font-black text-4xl md:text-5xl px-8 py-8 rounded-2xl shadow-2xl animate-bounce tracking-widest border-4 border-white flex flex-col items-center gap-4">
+                            <span className="text-6xl">🔔</span>
+                            <span>管理者からの呼出し</span>
+                        </div>
                     </div>
                 )}
                 
