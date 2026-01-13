@@ -258,8 +258,8 @@ const App: React.FC = () => {
     setSiteId(id);
     setCurrentRole(role);
     
-    // Name Logic: Field is always "現地", Admin uses input or defaults to "Admin"
-    const effectiveName = role === UserRole.FIELD ? "現地" : (name || "Admin");
+    // Name Logic: Field is always "現地", Admin uses input or defaults to "管理者"
+    const effectiveName = role === UserRole.FIELD ? "現地" : (name || "管理者");
     setUserName(effectiveName);
 
     setMessages([{
@@ -341,6 +341,7 @@ const App: React.FC = () => {
         onEndCall={endCall}
         userName={userName}
         userRole={currentRole}
+        onMarkRead={handleMarkRead} // Pass function to AdminDashboard
       />
     );
   }

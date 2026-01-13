@@ -18,6 +18,7 @@ interface AdminDashboardProps {
   onEndCall: () => void;
   userName: string;
   userRole: UserRole;
+  onMarkRead: (id: string) => void;
 }
 
 // Annotation types
@@ -51,7 +52,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     onAcceptCall,
     onEndCall,
     userName,
-    userRole
+    userRole,
+    onMarkRead
 }) => {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -75,7 +77,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
         remoteVideoRef.current.srcObject = remoteStream;
-        remoteVideoRef.current.muted = true; // Avoid feedback loop
+        remoteVideoRef.current.muted = true; // Ensure muted in JS
         remoteVideoRef.current.play().catch(e => console.error("Remote Play error:", e));
     }
   }, [remoteStream]);
@@ -377,7 +379,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                  </button>
              )}
 
-             {/* Camera Toggle Button (Shows "Return to Camera" during screen share) */}
+             {/* Camera Toggle Button (Renamed to Live Camera) */}
              <button 
                 onClick={toggleCamera}
                 className={`px-8 py-3.5 rounded-xl text-lg font-bold shadow-lg transition-all border ${
@@ -388,7 +390,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
                 }`}
              >
-                {localStream && !isScreenSharing ? '配信停止' : isScreenSharing ? 'カメラに戻る' : 'カメラ配信'}
+                {localStream && !isScreenSharing ? '配信停止' : isScreenSharing ? 'カメラに戻る' : 'ライブカメラ'}
              </button>
 
              {/* Screen Share Toggle */}
@@ -450,8 +452,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     ref={remoteVideoRef} 
                                     autoPlay 
                                     playsInline 
+                                    muted 
                                     className="w-full h-full object-contain bg-black"
-                                    // Muted handling in useEffect
                                 />
                             ) : (
                                 <div className="text-center p-8">
@@ -559,7 +561,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         {/* Right Chat Sidebar */}
         <div className="w-96 border-l border-slate-800">
-          <ChatInterface messages={messages} onSendMessage={onSendMessage} userName={userName} userRole={userRole} />
+          <ChatInterface 
+            messages={messages} 
+            onSendMessage={onSendMessage} 
+            userName={userName} 
+            userRole={userRole} 
+            onMarkRead={onMarkRead} 
+          />
         </div>
       </div>
     </div>
