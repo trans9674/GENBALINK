@@ -80,7 +80,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         remoteVideoRef.current.muted = true; // Ensure muted in JS
         remoteVideoRef.current.play().catch(e => console.error("Remote Play error:", e));
     }
-  }, [remoteStream]);
+  }, [remoteStream, isScreenSharing]);
 
   // --- Local Camera Handling (When NOT screen sharing) ---
   useEffect(() => {
@@ -455,7 +455,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         </span>
                         {callStatus === 'connected' && <span className="text-xs bg-green-500 text-black font-bold px-2 py-0.5 rounded ml-2">通話中</span>}
                     </div>
-                    {!isScreenSharing && !remoteStream && (
+                    {/* Updated condition: Button is visible if remoteStream is missing, even during screen share */}
+                    {!remoteStream && (
                          <button 
                              onClick={onRequestStream}
                              className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded font-bold transition-colors"
@@ -515,6 +516,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 onMouseUp={handleMouseUp}
                                 onMouseLeave={handleMouseUp}
                             />
+
+                            {/* New: PiP Remote Video during Screen Share */}
+                            {remoteStream && (
+                                <div className="absolute top-4 right-4 w-48 md:w-64 aspect-video bg-black rounded-lg border border-slate-600 shadow-2xl overflow-hidden z-30 group">
+                                    <video 
+                                        ref={remoteVideoRef} 
+                                        autoPlay 
+                                        playsInline 
+                                        muted 
+                                        className="w-full h-full object-contain"
+                                    />
+                                    <div className="absolute top-0 left-0 bg-black/60 text-white text-[10px] px-2 py-1">現場映像</div>
+                                </div>
+                            )}
                             
                             {/* Text Input Overlay */}
                             {textInput && (
