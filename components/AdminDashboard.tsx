@@ -89,12 +89,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }, [localStream, isScreenSharing]);
 
 
+  // --- Stop Screen Share ---
+  const stopScreenShare = () => {
+    if (displayStreamRef.current) {
+        displayStreamRef.current.getTracks().forEach(t => t.stop());
+        displayStreamRef.current = null;
+    }
+    if (screenVideoRef.current) {
+        screenVideoRef.current.srcObject = null;
+    }
+
+    setIsScreenSharing(false);
+    setShapes([]); // Clear annotations
+    onStreamReady(null); // Notify App to stop stream
+  };
+
   // --- Toggle Camera (Webcam) ---
   const toggleCamera = async () => {
     if (localStream && !isScreenSharing) {
+      // Just turn off camera
       onStreamReady(null);
     } else {
-      if (isScreenSharing) stopScreenShare();
+      // If screen sharing is active, stop it first
+      if (isScreenSharing) {
+          stopScreenShare();
+      }
+      
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         onStreamReady(stream);
@@ -110,8 +130,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       if (localStream) onStreamReady(null); // Stop current stream first
 
+      // Hint to avoid tabs if browser supports it (displaySurface)
       const stream = await navigator.mediaDevices.getDisplayMedia({ 
-          video: { cursor: "always" } as any, 
+          video: { 
+              cursor: "always",
+              displaySurface: "window" // Hint to prefer window/monitor over tab
+          } as any, 
           audio: false 
       });
       
@@ -136,21 +160,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           screenVideoRef.current.play().catch(e => console.error("Screen Play Error:", e));
       }
   }, [isScreenSharing]);
-
-  // --- Stop Screen Share ---
-  const stopScreenShare = () => {
-    if (displayStreamRef.current) {
-        displayStreamRef.current.getTracks().forEach(t => t.stop());
-        displayStreamRef.current = null;
-    }
-    if (screenVideoRef.current) {
-        screenVideoRef.current.srcObject = null;
-    }
-
-    setIsScreenSharing(false);
-    setShapes([]); // Clear annotations
-    onStreamReady(null); // Notify App to stop stream
-  };
 
 
   // --- Canvas Composition Loop (Video + Annotations) ---
@@ -363,17 +372,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                  </button>
              )}
 
-             {/* Camera Toggle */}
+             {/* Camera Toggle - Updated to allow switching from Screen Share */}
              <button 
                 onClick={toggleCamera}
-                disabled={isScreenSharing}
                 className={`px-8 py-3.5 rounded-xl text-lg font-bold shadow-lg transition-all border ${
                     localStream && !isScreenSharing
                     ? 'bg-red-600 border-red-500 text-white hover:bg-red-700 animate-pulse' 
-                    : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600 disabled:opacity-30'
+                    : isScreenSharing
+                        ? 'bg-emerald-600 border-emerald-500 text-white hover:bg-emerald-700' // Button to return to camera
+                        : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
                 }`}
              >
-                {localStream && !isScreenSharing ? '配信停止' : 'カメラ配信'}
+                {localStream && !isScreenSharing ? '配信停止' : isScreenSharing ? 'カメラに戻る' : 'カメラ配信'}
              </button>
 
              {/* Screen Share Toggle */}
@@ -456,8 +466,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     {/* Mode 2: Screen Sharing & Annotation Canvas */}
                     {isScreenSharing && (
                         <div className="relative w-full h-full bg-slate-800 flex items-center justify-center">
-                            {/* Hidden Source Video */}
-                            <video ref={screenVideoRef} className="hidden" muted playsInline />
+                            {/* Hidden Source Video - Changed from hidden to opacity-0 to ensure frame updates */}
+                            <video 
+                                ref={screenVideoRef} 
+                                className="absolute opacity-0 pointer-events-none -z-10" 
+                                muted 
+                                playsInline 
+                            />
                             
                             {/* Annotation Canvas (This is what is streamed) */}
                             <canvas 
