@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChatMessage, Attachment, CallStatus } from '../types';
+import { ChatMessage, Attachment, CallStatus, UserRole } from '../types';
 import ChatInterface from './ChatInterface';
 
 interface AdminDashboardProps {
@@ -17,6 +17,7 @@ interface AdminDashboardProps {
   onAcceptCall: () => void;
   onEndCall: () => void;
   userName: string;
+  userRole: UserRole;
 }
 
 // Annotation types
@@ -49,7 +50,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     onStartCall,
     onAcceptCall,
     onEndCall,
-    userName
+    userName,
+    userRole
 }) => {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -57,6 +59,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Screen Share & Annotation State
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const screenVideoRef = useRef<HTMLVideoElement>(null); // Hidden video for raw screen
+  const displayStreamRef = useRef<MediaStream | null>(null); // Ref to hold the stream
   const canvasRef = useRef<HTMLCanvasElement>(null); // Visible canvas for composition
   
   const [activeTool, setActiveTool] = useState<Tool>('cursor');
@@ -107,21 +110,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     try {
       if (localStream) onStreamReady(null); // Stop current stream first
 
-      const displayStream = await navigator.mediaDevices.getDisplayMedia({ 
+      const stream = await navigator.mediaDevices.getDisplayMedia({ 
           video: { cursor: "always" } as any, 
           audio: false 
       });
       
-      if (screenVideoRef.current) {
-          screenVideoRef.current.srcObject = displayStream;
-          screenVideoRef.current.play();
-      }
-
-      setIsScreenSharing(true);
-      setActiveTool('pen'); // Switch to pen by default
+      displayStreamRef.current = stream;
+      setIsScreenSharing(true); // This triggers render, showing the video element
+      setActiveTool('pen'); 
 
       // Handle user stopping share via browser UI
-      displayStream.getVideoTracks()[0].onended = () => {
+      stream.getVideoTracks()[0].onended = () => {
           stopScreenShare();
       };
 
@@ -130,13 +129,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   };
 
+  // --- Effect to Attach Stream to Video Element ---
+  useEffect(() => {
+      if (isScreenSharing && screenVideoRef.current && displayStreamRef.current) {
+          screenVideoRef.current.srcObject = displayStreamRef.current;
+          screenVideoRef.current.play().catch(e => console.error("Screen Play Error:", e));
+      }
+  }, [isScreenSharing]);
+
   // --- Stop Screen Share ---
   const stopScreenShare = () => {
-    if (screenVideoRef.current && screenVideoRef.current.srcObject) {
-        const stream = screenVideoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach(t => t.stop());
+    if (displayStreamRef.current) {
+        displayStreamRef.current.getTracks().forEach(t => t.stop());
+        displayStreamRef.current = null;
+    }
+    if (screenVideoRef.current) {
         screenVideoRef.current.srcObject = null;
     }
+
     setIsScreenSharing(false);
     setShapes([]); // Clear annotations
     onStreamReady(null); // Notify App to stop stream
@@ -167,7 +177,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         // 1. Draw Video Frame
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // Only draw if video has dimensions
+        if (video.videoWidth > 0) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        }
 
         // 2. Draw Shapes
         const drawShape = (s: Shape) => {
@@ -525,7 +538,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         {/* Right Chat Sidebar */}
         <div className="w-96 border-l border-slate-800">
-          <ChatInterface messages={messages} onSendMessage={onSendMessage} userName={userName} />
+          <ChatInterface messages={messages} onSendMessage={onSendMessage} userName={userName} userRole={userRole} />
         </div>
       </div>
     </div>

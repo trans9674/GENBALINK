@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ChatMessage, Attachment, CallStatus } from '../types';
+import { ChatMessage, Attachment, CallStatus, UserRole } from '../types';
 import ChatInterface from './ChatInterface';
 
 interface FieldDashboardProps {
@@ -18,7 +18,8 @@ interface FieldDashboardProps {
   onEndCall: () => void;
   onTranscription: (text: string, type: 'user' | 'model') => void; 
   userName: string;
-  onMarkRead: (id: string) => void; // Added
+  onMarkRead: (id: string) => void; 
+  userRole: UserRole;
 }
 
 const FieldDashboard: React.FC<FieldDashboardProps> = ({ 
@@ -35,10 +36,10 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   onAcceptCall,
   onEndCall,
   userName,
-  onMarkRead
+  onMarkRead,
+  userRole
 }) => {
   const [ecoMode, setEcoMode] = useState(false);
-  // Removed activeTab state as layout is now split screen
   const videoRef = useRef<HTMLVideoElement>(null);
   const adminVideoRef = useRef<HTMLVideoElement>(null); 
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
@@ -111,7 +112,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   useEffect(() => {
     const startCamera = async () => {
       try {
-        // Changed to 'user' (front facing) as requested ("opposite side")
+        // Changed to 'user' (front facing)
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { facingMode: 'user' }, 
             audio: true 
@@ -453,26 +454,38 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
         <div className="flex-1 flex relative bg-black">
              {/* Video Area */}
              <div className="flex-1 relative bg-black">
-                {/* Local Camera (Field View) */}
+                
+                {/* Admin Video (MAIN View if available, otherwise hidden/Sub logic handled by layout) */}
+                <video 
+                    ref={adminVideoRef} 
+                    autoPlay 
+                    playsInline 
+                    // If adminStream exists, it is MAIN (inset-0, z-10). If not, it is hidden.
+                    className={`absolute transition-all duration-300 ${
+                        adminStream 
+                        ? 'inset-0 w-full h-full object-contain z-10' 
+                        : 'hidden'
+                    }`}
+                />
+
+                {/* Local Camera (PiP if admin stream exists, MAIN if not) */}
                 <video 
                     ref={videoRef} 
                     autoPlay 
                     playsInline 
                     muted 
-                    className="w-full h-full object-cover"
+                    className={`absolute transition-all duration-300 ${
+                        adminStream 
+                        ? 'top-4 right-4 w-32 md:w-48 aspect-video rounded-lg border border-slate-600 shadow-2xl z-20 object-cover'
+                        : 'inset-0 w-full h-full object-cover z-0'
+                    }`}
                 />
-
-                {/* Admin Stream Overlay (PiP) */}
+                
+                {/* PiP Label for Local Camera when it is PiP */}
                 {adminStream && (
-                    <div className={`absolute top-4 right-4 w-32 md:w-48 aspect-video bg-slate-900 rounded-lg border-2 ${callStatus === 'connected' ? 'border-green-500' : 'border-blue-500'} overflow-hidden shadow-2xl z-20`}>
-                         <video 
-                            ref={adminVideoRef} 
-                            autoPlay 
-                            playsInline 
-                            className="w-full h-full object-cover"
-                        />
-                        <div className="absolute bottom-0 left-0 w-full bg-blue-600/80 text-white text-[10px] text-center">管理者</div>
-                    </div>
+                     <div className="absolute top-4 right-4 w-32 md:w-48 aspect-video z-30 pointer-events-none border-2 border-slate-500 rounded-lg">
+                         <div className="absolute bottom-0 left-0 w-full bg-slate-900/80 text-white text-[10px] text-center">現場</div>
+                     </div>
                 )}
                 
                 {/* Visual Alert Overlay (Calling) */}
@@ -486,7 +499,8 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                 )}
                 
                 {/* Connection Status Overlay (Mobile) */}
-                {!connectionStatus.includes('完了') && (
+                {/* Hide if connected OR if in active call OR if admin stream is visible */}
+                {(!connectionStatus.includes('完了') && callStatus !== 'connected' && !adminStream) && (
                     <div className="absolute top-4 left-4 right-4 bg-yellow-900/80 text-yellow-100 p-2 rounded text-center text-sm backdrop-blur border border-yellow-700/50 z-10">
                         <p className="font-bold mb-1">未接続: 管理者端末を探しています...</p>
                         <button 
@@ -499,7 +513,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                 )}
                 
                 {/* Call Widget */}
-                <div className="absolute bottom-8 left-8 right-8 flex justify-between items-end">
+                <div className="absolute bottom-8 left-8 right-8 flex justify-between items-end z-40">
                     <div className="bg-black/60 backdrop-blur-md p-4 rounded-xl border border-white/10 max-w-md">
                          {renderCallWidget()}
                     </div>
@@ -513,6 +527,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                     onSendMessage={onSendMessage} 
                     userName={userName}
                     onMarkRead={onMarkRead}
+                    userRole={userRole}
                  />
              </div>
         </div>

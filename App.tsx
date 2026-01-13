@@ -54,7 +54,7 @@ const App: React.FC = () => {
 
   // --- 接続確立後のセットアップ ---
   const setupConnection = useCallback((conn: DataConnection) => {
-      if (connRef.current?.open) return; 
+      if (connRef.current === conn && conn.open) return; 
 
       console.log("Connection Established!");
       connRef.current = conn;
@@ -64,6 +64,11 @@ const App: React.FC = () => {
           clearInterval(retryIntervalRef.current);
           retryIntervalRef.current = null;
       }
+
+      // 既存のリスナーを削除
+      conn.off('data');
+      conn.off('close');
+      conn.off('error');
 
       conn.on('data', handleDataReceived);
       
@@ -90,7 +95,7 @@ const App: React.FC = () => {
     if (targetId === peerRef.current.id) return;
 
     console.log(`Connecting to ${targetId}...`);
-    setPeerStatus(`接続試行中...`);
+    if (!connRef.current) setPeerStatus(`接続試行中...`);
 
     const conn = peerRef.current.connect(targetId, { reliable: true });
 
@@ -101,7 +106,9 @@ const App: React.FC = () => {
 
   const startConnectionRetry = useCallback(() => {
       if (retryIntervalRef.current) clearInterval(retryIntervalRef.current);
+      // 即時実行
       connectToTarget();
+      // 定期実行
       retryIntervalRef.current = setInterval(() => {
           if (!connRef.current || !connRef.current.open) {
               connectToTarget();
@@ -131,7 +138,12 @@ const App: React.FC = () => {
 
     peer.on('connection', (conn) => {
       console.log('Incoming Data Connection');
-      conn.on('open', () => setupConnection(conn));
+      // すでにOpenしている場合のハンドリング (ここが重要)
+      if (conn.open) {
+          setupConnection(conn);
+      } else {
+          conn.on('open', () => setupConnection(conn));
+      }
     });
 
     // 映像着信処理
@@ -150,7 +162,7 @@ const App: React.FC = () => {
       if (err.type === 'unavailable-id') {
          setPeerStatus('ID重複エラー: 既にログイン中です');
       } else if (err.type !== 'peer-unavailable') {
-         setPeerStatus(`エラー: ${err.type}`);
+         // エラーログのみ
       }
     });
 
@@ -225,7 +237,6 @@ const App: React.FC = () => {
           
           // Ensure we are sending video/audio if not already
           if (currentRole === UserRole.ADMIN && !localStream) {
-              // Admin might want to start camera on answer if not sharing screen
              try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 handleAdminStreamChange(stream);
@@ -329,6 +340,7 @@ const App: React.FC = () => {
         onAcceptCall={acceptCall}
         onEndCall={endCall}
         userName={userName}
+        userRole={currentRole}
       />
     );
   }
@@ -351,6 +363,7 @@ const App: React.FC = () => {
       onEndCall={endCall}
       userName={userName}
       onMarkRead={handleMarkRead}
+      userRole={currentRole}
     />
   );
 };

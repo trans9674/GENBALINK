@@ -1,14 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChatMessage, Attachment } from '../types';
+import { ChatMessage, Attachment, UserRole } from '../types';
 
 interface ChatInterfaceProps {
   messages: ChatMessage[];
   onSendMessage: (text: string, attachment?: Attachment) => void;
   userName: string;
-  onMarkRead?: (id: string) => void; // Optional handler for marking read
+  onMarkRead?: (id: string) => void;
+  userRole?: UserRole;
 }
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, userName, onMarkRead }) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, userName, onMarkRead, userRole }) => {
   const [input, setInput] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -38,7 +39,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
         return;
     }
 
-    // Limit file size (approx 2MB for stability over PeerJS data channel)
     if (file.size > 2 * 1024 * 1024) {
         alert('ファイルサイズが大きすぎます（上限2MB）');
         return;
@@ -52,7 +52,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
             url: dataUrl,
             name: file.name
         };
-        // Send immediately as a message with attachment
         onSendMessage(`${file.name} を送信しました`, attachment);
     };
     reader.readAsDataURL(file);
@@ -80,6 +79,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
           const isMe = msg.sender === userName;
           const isAI = msg.sender === 'AI';
           const isUnread = !isMe && !msg.isRead;
+          const isRead = msg.isRead;
           
           return (
             <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
@@ -140,11 +140,22 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
                     </div>
                 )}
 
-                {isMe && msg.isRead && (
+                {/* Status Labels */}
+                {/* 自分の送信メッセージが既読になった場合 */}
+                {isMe && isRead && (
                   <div className="text-[10px] text-right mt-1 opacity-70">既読</div>
                 )}
+                
+                {/* 相手からのメッセージを自分が既読にした場合（追加） */}
+                {!isMe && isRead && (
+                   <div className="text-[10px] text-right mt-1 opacity-70 text-green-300">既読</div>
+                )}
+
+                {/* Unread Action Prompt */}
                 {isUnread && (
-                  <div className="text-[10px] text-right mt-1 text-yellow-300 font-bold">タップして既読</div>
+                  <div className="text-[10px] text-right mt-1 text-yellow-300 font-bold">
+                    {userRole === UserRole.ADMIN ? '【クリックで既読】' : 'タップして既読'}
+                  </div>
                 )}
               </div>
             </div>
