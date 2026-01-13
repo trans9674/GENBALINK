@@ -12,6 +12,7 @@ interface FieldDashboardProps {
   onClearAlert: () => void;
   onStreamReady: (stream: MediaStream) => void;
   connectionStatus: string;
+  onReconnect?: () => void; // Added
 }
 
 const FieldDashboard: React.FC<FieldDashboardProps> = ({ 
@@ -22,7 +23,8 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   incomingAlert,
   onClearAlert,
   onStreamReady,
-  connectionStatus
+  connectionStatus,
+  onReconnect
 }) => {
   const [ecoMode, setEcoMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'camera' | 'chat'>('camera');
@@ -59,7 +61,6 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   useEffect(() => {
     const startCamera = async () => {
       try {
-        // Video and Audio for WebRTC
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { facingMode: 'environment' }, 
             audio: true 
@@ -67,15 +68,14 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
         
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          // Mute local playback to prevent feedback loop
           videoRef.current.muted = true;
         }
         
-        // Pass stream up for PeerJS
         onStreamReady(stream);
 
       } catch (e) {
         console.error("Camera failed", e);
+        alert("カメラへのアクセスを許可してください");
       }
     };
     startCamera();
@@ -114,9 +114,20 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
             <span className="px-3 py-1 bg-blue-900 text-blue-200 text-xs rounded-full border border-blue-700">{siteId}</span>
         </div>
         <div className="flex items-center gap-2 md:gap-4">
-            <div className="hidden md:block text-xs text-slate-400">
-                P2P: <span className={connectionStatus.includes('完了') ? 'text-green-400' : 'text-yellow-400'}>{connectionStatus}</span>
-            </div>
+            {/* Connection Status & Reconnect Button */}
+            <button 
+                onClick={onReconnect}
+                className={`hidden md:flex items-center gap-2 px-3 py-1 rounded border text-xs font-bold transition-all ${
+                    connectionStatus.includes('完了') 
+                    ? 'border-green-800 bg-green-900/20 text-green-400 cursor-default' 
+                    : 'border-yellow-600 bg-yellow-900/20 text-yellow-400 hover:bg-yellow-900/40 animate-pulse'
+                }`}
+                disabled={connectionStatus.includes('完了')}
+            >
+                <span className={`w-2 h-2 rounded-full ${connectionStatus.includes('完了') ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
+                {connectionStatus}
+            </button>
+
             <button 
                 onClick={() => setEcoMode(true)}
                 className="bg-emerald-900/50 hover:bg-emerald-800 border border-emerald-700 text-emerald-400 px-4 py-2 rounded-lg font-bold flex items-center gap-2 text-sm"
@@ -140,6 +151,19 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                     muted 
                     className="w-full h-full object-cover"
                 />
+                
+                {/* Connection Status Overlay (Mobile) */}
+                {!connectionStatus.includes('完了') && (
+                    <div className="absolute top-4 left-4 right-4 bg-yellow-900/80 text-yellow-100 p-2 rounded text-center text-sm backdrop-blur border border-yellow-700/50">
+                        <p className="font-bold mb-1">未接続: 管理者端末を探しています...</p>
+                        <button 
+                            onClick={onReconnect}
+                            className="bg-yellow-700 text-white px-3 py-1 rounded text-xs mt-1"
+                        >
+                            再試行
+                        </button>
+                    </div>
+                )}
                 
                 {/* AI Visualizer Overlay */}
                 <div className="absolute bottom-8 left-8 right-8 flex justify-between items-end">

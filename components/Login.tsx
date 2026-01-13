@@ -11,12 +11,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
 
   const handleLogin = (role: UserRole) => {
-    if (!siteId.trim() || !password.trim()) {
+    const cleanId = siteId.trim();
+    if (!cleanId || !password.trim()) {
       setError('現場IDとパスワードを入力してください');
       return;
     }
-    // ここで実際のアプリならAPI認証を行う
-    onLogin(role, siteId);
+    // IDの空白除去
+    onLogin(role, cleanId);
   };
 
   return (
@@ -92,7 +93,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         </div>
         
         <div className="mt-8 text-center text-slate-600 text-xs">
-          GenbaLink v2.0 &bull; Secure Connection
+          GenbaLink v2.1 &bull; Auto-Retry Enabled
         </div>
       </div>
     </div>
