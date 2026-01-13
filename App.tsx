@@ -3,19 +3,23 @@ import { UserRole, ChatMessage } from './types';
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
 import FieldDashboard from './components/FieldDashboard';
-import { Peer, DataConnection } from 'peerjs';
+import { Peer, DataConnection, MediaConnection } from 'peerjs';
 
 const App: React.FC = () => {
   const [currentRole, setCurrentRole] = useState<UserRole>(UserRole.NONE);
   const [siteId, setSiteId] = useState<string>("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [incomingAlert, setIncomingAlert] = useState(false);
+  
+  // remoteStream: 相手の映像 (AdminにとってはFieldの映像、FieldにとってはAdminの映像)
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  // localStream: 自分の映像 (Fieldは常時、Adminは任意)
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [peerStatus, setPeerStatus] = useState<string>('未接続');
 
   const peerRef = useRef<Peer | null>(null);
   const connRef = useRef<DataConnection | null>(null);
+  const mediaConnRef = useRef<MediaConnection | null>(null); // 通話管理用
   const retryIntervalRef = useRef<any>(null);
 
   // --- メッセージ受信処理 (共通) ---
@@ -40,13 +44,12 @@ const App: React.FC = () => {
 
   // --- 接続確立後のセットアップ ---
   const setupConnection = useCallback((conn: DataConnection) => {
-      if (connRef.current?.open) return; // 既に接続済みなら無視
+      if (connRef.current?.open) return; 
 
       console.log("Connection Established!");
       connRef.current = conn;
       setPeerStatus('接続完了');
       
-      // リトライ停止
       if (retryIntervalRef.current) {
           clearInterval(retryIntervalRef.current);
           retryIntervalRef.current = null;
@@ -58,7 +61,6 @@ const App: React.FC = () => {
          console.log("Connection closed remote");
          setPeerStatus('切断: 再接続待機中...');
          connRef.current = null;
-         // 切断されたらリトライ再開
          startConnectionRetry();
       });
       
@@ -71,42 +73,24 @@ const App: React.FC = () => {
   // --- 接続試行ロジック (双方向) ---
   const connectToTarget = useCallback(() => {
     if (!peerRef.current || peerRef.current.destroyed || !siteId) return;
-    if (connRef.current?.open) return; // 接続済みなら何もしない
+    if (connRef.current?.open) return;
 
-    // 接続先ID決定: 
-    // Admin -> Field (ID: siteId)
-    // Field -> Admin (ID: siteId-admin)
     const targetId = currentRole === UserRole.ADMIN ? siteId : `${siteId}-admin`;
-    
-    // 自分自身への接続を防ぐ
     if (targetId === peerRef.current.id) return;
 
     console.log(`Connecting to ${targetId}...`);
     setPeerStatus(`接続試行中...`);
 
-    const conn = peerRef.current.connect(targetId, {
-        reliable: true
-    });
+    const conn = peerRef.current.connect(targetId, { reliable: true });
 
-    // 相手が見つかって接続が開いたとき
-    conn.on('open', () => {
-        setupConnection(conn);
-    });
-
-    conn.on('error', (err) => {
-        // 接続失敗はよくあるのでログだけ出してリトライに任せる
-        console.log("Connect attempt failed (retrying...):", err);
-    });
+    conn.on('open', () => setupConnection(conn));
+    conn.on('error', (err) => console.log("Connect attempt failed:", err));
 
   }, [siteId, currentRole, setupConnection]);
 
   const startConnectionRetry = useCallback(() => {
       if (retryIntervalRef.current) clearInterval(retryIntervalRef.current);
-      
-      // 即時実行
       connectToTarget();
-      
-      // 3秒ごとにリトライ (双方向から攻めるので短めに)
       retryIntervalRef.current = setInterval(() => {
           if (!connRef.current || !connRef.current.open) {
               connectToTarget();
@@ -119,49 +103,43 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!siteId || currentRole === UserRole.NONE) return;
 
-    // 既存の接続があればクリーンアップ
     if (peerRef.current) peerRef.current.destroy();
 
     const myPeerId = currentRole === UserRole.FIELD ? siteId : `${siteId}-admin`;
     console.log(`Initializing Peer with ID: ${myPeerId}`);
     setPeerStatus('初期化中...');
 
-    const peer = new Peer(myPeerId, {
-      debug: 1,
-    });
+    const peer = new Peer(myPeerId, { debug: 1 });
     peerRef.current = peer;
 
     peer.on('open', (id) => {
       console.log('Peer Open. My ID:', id);
-      setPeerStatus('待機中: 相手を探しています...');
-      // ID取得でき次第、接続試行開始 (Admin/Field両方)
+      setPeerStatus('待機中...');
       startConnectionRetry();
     });
 
-    // 相手から接続が来た場合 (受動接続)
     peer.on('connection', (conn) => {
-      console.log('Incoming Data Connection from:', conn.peer);
-      conn.on('open', () => {
-          setupConnection(conn);
-      });
+      console.log('Incoming Data Connection');
+      conn.on('open', () => setupConnection(conn));
     });
 
+    // 映像着信処理 (AdminもFieldも共通で受けられるようにする)
     peer.on('call', (call) => {
-      console.log('Incoming Call from:', call.peer);
+      console.log('Incoming Video Call from:', call.peer);
+      // 着信に応答 (Receive OnlyでOK)
       call.answer(); 
       call.on('stream', (stream) => {
-        console.log("Stream Received");
+        console.log("Remote Stream Received");
         setRemoteStream(stream);
       });
+      call.on('error', (e) => console.error("Call Error", e));
     });
 
     peer.on('error', (err) => {
       console.error('Peer error:', err);
       if (err.type === 'unavailable-id') {
          setPeerStatus('ID重複エラー: 既にログイン中です');
-      } else if (err.type === 'peer-unavailable') {
-         // 相手がまだいないだけなので無視してリトライ継続
-      } else {
+      } else if (err.type !== 'peer-unavailable') {
          setPeerStatus(`エラー: ${err.type}`);
       }
     });
@@ -185,20 +163,49 @@ const App: React.FC = () => {
 
     const handleTriggerCall = () => {
         if (!peerRef.current || !localStream) {
-            console.warn("Cannot call admin: Peer or Stream not ready");
             alert("カメラ準備中または通信エラーです");
             return;
         }
         const adminId = `${siteId}-admin`;
         console.log(`Calling Admin (${adminId}) with stream...`);
-        
         const call = peerRef.current.call(adminId, localStream);
-        call.on('error', (e) => console.error("Call error", e));
+        mediaConnRef.current = call;
     };
 
     window.addEventListener('TRIGGER_CALL_ADMIN', handleTriggerCall);
     return () => window.removeEventListener('TRIGGER_CALL_ADMIN', handleTriggerCall);
   }, [currentRole, siteId, localStream]);
+
+
+  // --- 管理者用: カメラ配信切り替え ---
+  const toggleAdminCamera = async () => {
+      if (localStream) {
+          // 停止処理
+          localStream.getTracks().forEach(track => track.stop());
+          setLocalStream(null);
+          if (mediaConnRef.current) {
+              mediaConnRef.current.close();
+              mediaConnRef.current = null;
+          }
+      } else {
+          // 開始処理
+          try {
+              const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+              setLocalStream(stream);
+              
+              // 現場へ発信
+              if (peerRef.current) {
+                  const targetId = siteId;
+                  console.log(`Calling Field (${targetId}) with admin stream...`);
+                  const call = peerRef.current.call(targetId, stream);
+                  mediaConnRef.current = call;
+              }
+          } catch (e) {
+              console.error("Admin camera error:", e);
+              alert("カメラ・マイクへのアクセスを許可してください");
+          }
+      }
+  };
 
 
   // --- UI Actions ---
@@ -253,16 +260,12 @@ const App: React.FC = () => {
 
   const requestStream = () => {
       if (connRef.current && connRef.current.open) {
-          console.log("Requesting stream from Field...");
           connRef.current.send({ type: 'REQUEST_STREAM' });
       } else {
-          alert("現場端末とデータ接続されていません。接続完了までお待ちください。");
-          // 手動リトライも兼ねる
           connectToTarget();
       }
   };
 
-  // 手動再接続用
   const handleManualReconnect = () => {
       setPeerStatus('手動再接続中...');
       connectToTarget();
@@ -280,6 +283,8 @@ const App: React.FC = () => {
         onSendMessage={handleSendMessage} 
         onTriggerAlert={handleAdminAlert}
         remoteStream={remoteStream}
+        localStream={localStream} // Admin's own camera
+        onToggleCamera={toggleAdminCamera} // Toggle function
         connectionStatus={peerStatus}
         onRequestStream={requestStream}
       />
@@ -295,6 +300,7 @@ const App: React.FC = () => {
       incomingAlert={incomingAlert}
       onClearAlert={() => setIncomingAlert(false)}
       onStreamReady={(stream) => setLocalStream(stream)}
+      adminStream={remoteStream} // Admin's video stream for Field
       connectionStatus={peerStatus}
       onReconnect={handleManualReconnect}
     />

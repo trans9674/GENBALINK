@@ -7,7 +7,9 @@ interface AdminDashboardProps {
   messages: ChatMessage[];
   onSendMessage: (text: string) => void;
   onTriggerAlert: () => void;
-  remoteStream: MediaStream | null;
+  remoteStream: MediaStream | null; // 現場の映像
+  localStream: MediaStream | null;  // 自分の映像
+  onToggleCamera: () => void;
   connectionStatus: string;
   onRequestStream: () => void;
 }
@@ -18,21 +20,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     onSendMessage, 
     onTriggerAlert,
     remoteStream,
+    localStream,
+    onToggleCamera,
     connectionStatus,
     onRequestStream
 }) => {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const localVideoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
         remoteVideoRef.current.srcObject = remoteStream;
-        // ブラウザの自動再生ポリシー対策: 
-        // ユーザーインタラクションなしで再生する場合、mutedが必要なことが多い
-        // ここでは一旦mutedで再生開始し、必要ならコントロールで解除する
-        remoteVideoRef.current.muted = true; 
-        remoteVideoRef.current.play().catch(e => console.error("Play error:", e));
+        remoteVideoRef.current.muted = true; // Auto-play policy
+        remoteVideoRef.current.play().catch(e => console.error("Remote Play error:", e));
     }
   }, [remoteStream]);
+
+  useEffect(() => {
+    if (localVideoRef.current && localStream) {
+        localVideoRef.current.srcObject = localStream;
+        localVideoRef.current.muted = true; // Always mute self
+    }
+  }, [localStream]);
 
   return (
     <div className="h-screen flex flex-col bg-slate-950">
@@ -54,10 +63,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <span className={`font-bold ${connectionStatus.includes('完了') ? 'text-green-400' : 'text-yellow-400'}`}>{connectionStatus}</span>
              </div>
              <button 
+                onClick={onToggleCamera}
+                className={`px-4 py-1.5 rounded text-sm font-bold shadow-lg transition-all border ${
+                    localStream 
+                    ? 'bg-red-600 border-red-500 text-white hover:bg-red-700 animate-pulse' 
+                    : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
+                }`}
+             >
+                {localStream ? '配信停止' : 'カメラ配信'}
+             </button>
+             <button 
                 onClick={onTriggerAlert}
                 className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-1.5 rounded text-sm font-bold shadow-lg shadow-orange-900/20 active:scale-95 transition-all"
              >
-                現場への警告 / 起動
+                警告
              </button>
              <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold">A</div>
         </div>
@@ -103,17 +122,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 ref={remoteVideoRef} 
                                 autoPlay 
                                 playsInline 
-                                muted // Default muted to ensure autoplay
+                                muted // Default muted
                                 className="w-full h-full object-contain bg-black"
                             />
                         ) : (
                             <div className="text-center p-8">
                                 <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
                                 <p className="text-slate-500 mb-2">映像信号を待機中...</p>
-                                <p className="text-xs text-slate-600 max-w-xs mx-auto mb-4">
-                                    現場端末が接続され、カメラ許可が有効になっていることを確認してください。
-                                    「映像を要求」ボタンを押すと接続を試みます。
-                                </p>
+                            </div>
+                        )}
+                        
+                        {/* Admin Self View (PiP) */}
+                        {localStream && (
+                            <div className="absolute bottom-4 right-4 w-32 md:w-48 aspect-video bg-black rounded-lg border border-slate-600 overflow-hidden shadow-2xl">
+                                <video
+                                    ref={localVideoRef}
+                                    autoPlay
+                                    playsInline
+                                    muted
+                                    className="w-full h-full object-cover"
+                                />
+                                <div className="absolute top-0 left-0 bg-red-600 text-white text-[10px] px-1">REC</div>
                             </div>
                         )}
                         

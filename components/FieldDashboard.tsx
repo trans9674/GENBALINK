@@ -11,8 +11,9 @@ interface FieldDashboardProps {
   incomingAlert: boolean;
   onClearAlert: () => void;
   onStreamReady: (stream: MediaStream) => void;
+  adminStream: MediaStream | null; // Added: Admin's video stream
   connectionStatus: string;
-  onReconnect?: () => void; // Added
+  onReconnect?: () => void; 
 }
 
 const FieldDashboard: React.FC<FieldDashboardProps> = ({ 
@@ -23,12 +24,14 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   incomingAlert,
   onClearAlert,
   onStreamReady,
+  adminStream,
   connectionStatus,
   onReconnect
 }) => {
   const [ecoMode, setEcoMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'camera' | 'chat'>('camera');
   const videoRef = useRef<HTMLVideoElement>(null);
+  const adminVideoRef = useRef<HTMLVideoElement>(null); // Added
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
   const { connect, disconnect, isConnected, isSpeaking, volume } = useGenAiLive({
@@ -57,7 +60,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
     };
   }, []);
 
-  // Handle Camera
+  // Handle Local Camera
   useEffect(() => {
     const startCamera = async () => {
       try {
@@ -80,6 +83,16 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
     };
     startCamera();
   }, []);
+
+  // Handle Admin Stream
+  useEffect(() => {
+    if (adminVideoRef.current && adminStream) {
+        adminVideoRef.current.srcObject = adminStream;
+        // Do NOT mute admin stream, we want to hear them
+        // But for testing on same device, it might echo. In production, no mute.
+        adminVideoRef.current.play().catch(e => console.error("Admin video play error", e));
+    }
+  }, [adminStream]);
 
   useEffect(() => {
     if (incomingAlert && ecoMode) {
@@ -144,6 +157,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
         <div className="flex-1 relative bg-black">
           {activeTab === 'camera' && (
             <div className="relative h-full w-full">
+                {/* Local Camera (Field View) */}
                 <video 
                     ref={videoRef} 
                     autoPlay 
@@ -151,10 +165,23 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                     muted 
                     className="w-full h-full object-cover"
                 />
+
+                {/* Admin Stream Overlay (PiP) */}
+                {adminStream && (
+                    <div className="absolute top-4 right-4 w-32 md:w-48 aspect-video bg-slate-900 rounded-lg border-2 border-blue-500 overflow-hidden shadow-2xl z-20">
+                         <video 
+                            ref={adminVideoRef} 
+                            autoPlay 
+                            playsInline 
+                            className="w-full h-full object-cover"
+                        />
+                        <div className="absolute bottom-0 left-0 w-full bg-blue-600/80 text-white text-[10px] text-center">管理者</div>
+                    </div>
+                )}
                 
                 {/* Connection Status Overlay (Mobile) */}
                 {!connectionStatus.includes('完了') && (
-                    <div className="absolute top-4 left-4 right-4 bg-yellow-900/80 text-yellow-100 p-2 rounded text-center text-sm backdrop-blur border border-yellow-700/50">
+                    <div className="absolute top-4 left-4 right-4 bg-yellow-900/80 text-yellow-100 p-2 rounded text-center text-sm backdrop-blur border border-yellow-700/50 z-10">
                         <p className="font-bold mb-1">未接続: 管理者端末を探しています...</p>
                         <button 
                             onClick={onReconnect}
