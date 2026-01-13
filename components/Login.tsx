@@ -42,10 +42,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 type="text" 
                 value={siteId}
                 onChange={(e) => { setSiteId(e.target.value); setError(''); }}
-                placeholder="例: 001, 002 (複数可)"
+                placeholder="例: GENBA-001"
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
               />
-              <p className="text-[10px] text-slate-500 mt-1">※管理者はカンマ区切りで複数IDを入力可能</p>
             </div>
 
             <div>
@@ -94,7 +93,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         </div>
         
         <div className="mt-8 text-center text-slate-600 text-xs">
-          GenbaLink v2.2 &bull; Multi-Site Supported
+          GenbaLink v2.1 &bull; Auto-Retry Enabled
         </div>
       </div>
     </div>

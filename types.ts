@@ -17,11 +17,3 @@ export interface LiveState {
   isSpeaking: boolean;
   volume: number;
 }
-
-export interface SiteSession {
-  id: string;
-  status: string; // 'connected', 'disconnected', 'connecting'
-  stream: MediaStream | null;
-  lastPing: number;
-  hasAlert: boolean;
-}
