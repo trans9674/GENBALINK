@@ -104,24 +104,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     onStreamReady(null); // Notify App to stop stream
   };
 
-  // --- Toggle Camera (Webcam) ---
+  // --- Toggle Camera (Switch between Camera and Screen Share or Off) ---
   const toggleCamera = async () => {
-    if (localStream && !isScreenSharing) {
-      // Just turn off camera
-      onStreamReady(null);
-    } else {
-      // If screen sharing is active, stop it first
-      if (isScreenSharing) {
-          stopScreenShare();
-      }
-      
-      try {
+    // 1. If currently sharing screen, stop it first, then start camera
+    if (isScreenSharing) {
+        stopScreenShare();
+        // Give a tiny tick for state to clear if needed, though usually sequential calls work
+        // However, to be safe, we proceed to start camera.
+    } else if (localStream) {
+        // 2. If camera is on (and not screen sharing), just turn it off
+        onStreamReady(null);
+        return;
+    }
+
+    // 3. Start Camera
+    try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         onStreamReady(stream);
-      } catch (e) {
+    } catch (e) {
         console.error("Camera Error", e);
         alert("カメラへのアクセスを許可してください");
-      }
     }
   };
 
@@ -134,7 +136,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       const stream = await navigator.mediaDevices.getDisplayMedia({ 
           video: { 
               cursor: "always",
-              displaySurface: "window" // Hint to prefer window/monitor over tab
+              displaySurface: "window" // Hint to prefer window over tab
           } as any, 
           audio: false 
       });
@@ -157,7 +159,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   useEffect(() => {
       if (isScreenSharing && screenVideoRef.current && displayStreamRef.current) {
           screenVideoRef.current.srcObject = displayStreamRef.current;
-          screenVideoRef.current.play().catch(e => console.error("Screen Play Error:", e));
+          // Ensure playback starts for canvas consumption
+          screenVideoRef.current.onloadedmetadata = () => {
+             screenVideoRef.current?.play().catch(e => console.error("Screen Play Error:", e));
+          };
       }
   }, [isScreenSharing]);
 
@@ -333,7 +338,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   return (
     <div className="h-screen flex flex-col bg-slate-950">
-      {/* Header - Dimensions and fonts increased by one step from previous */}
+      {/* Header */}
       <div className="h-24 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-10 shadow-md z-10">
         <div className="flex items-center gap-8">
             {/* Logo */}
@@ -352,7 +357,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <span className={`font-bold ${connectionStatus.includes('完了') ? 'text-green-400' : 'text-yellow-400'}`}>{connectionStatus}</span>
              </div>
              
-             {/* Call Button - Increased size, font, icon */}
+             {/* Call Button */}
              {callStatus === 'incoming' ? (
                  <button onClick={onAcceptCall} className="bg-green-600 hover:bg-green-500 text-white px-8 py-3.5 rounded-xl text-lg font-bold shadow animate-bounce">
                      着信に応答
@@ -372,14 +377,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                  </button>
              )}
 
-             {/* Camera Toggle - Updated to allow switching from Screen Share */}
+             {/* Camera Toggle Button (Shows "Return to Camera" during screen share) */}
              <button 
                 onClick={toggleCamera}
                 className={`px-8 py-3.5 rounded-xl text-lg font-bold shadow-lg transition-all border ${
                     localStream && !isScreenSharing
                     ? 'bg-red-600 border-red-500 text-white hover:bg-red-700 animate-pulse' 
                     : isScreenSharing
-                        ? 'bg-emerald-600 border-emerald-500 text-white hover:bg-emerald-700' // Button to return to camera
+                        ? 'bg-emerald-600 border-emerald-500 text-white hover:bg-emerald-700' // Green "Return" button
                         : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
                 }`}
              >
@@ -466,11 +471,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     {/* Mode 2: Screen Sharing & Annotation Canvas */}
                     {isScreenSharing && (
                         <div className="relative w-full h-full bg-slate-800 flex items-center justify-center">
-                            {/* Hidden Source Video - Changed from hidden to opacity-0 to ensure frame updates */}
+                            {/* Hidden Source Video - Using small size and opacity-0 to keep it rendering for canvas */}
                             <video 
                                 ref={screenVideoRef} 
-                                className="absolute opacity-0 pointer-events-none -z-10" 
+                                className="absolute top-0 left-0 w-10 h-10 opacity-0 pointer-events-none -z-10" 
                                 muted 
+                                autoPlay
                                 playsInline 
                             />
                             

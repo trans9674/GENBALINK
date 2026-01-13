@@ -453,40 +453,45 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
         {/* Main Content Area (Split Screen) */}
         <div className="flex-1 flex relative bg-black">
              {/* Video Area */}
-             <div className="flex-1 relative bg-black">
+             <div className="flex-1 relative bg-black flex items-center justify-center">
                 
-                {/* Admin Video (MAIN View if available, otherwise hidden/Sub logic handled by layout) */}
+                {/* 1. Admin Video (Screen Share) - MAIN BACKGROUND LAYER */}
+                {/* "Fit Width" implies maximize size. object-contain ensures no crop, w-full ensures it stretches horizontally. */}
+                {/* z-0 puts it at the back. */}
                 <video 
                     ref={adminVideoRef} 
                     autoPlay 
                     playsInline 
-                    // If adminStream exists, it is MAIN (inset-0, z-10). If not, it is hidden.
-                    className={`absolute transition-all duration-300 ${
-                        adminStream 
-                        ? 'inset-0 w-full h-full object-contain z-10' 
-                        : 'hidden'
+                    className={`absolute inset-0 w-full h-full z-0 bg-black transition-opacity duration-300 ${
+                        adminStream ? 'opacity-100' : 'opacity-0'
                     }`}
+                    style={{ objectFit: 'contain' }}
                 />
 
-                {/* Local Camera (PiP if admin stream exists, MAIN if not) */}
-                <video 
-                    ref={videoRef} 
-                    autoPlay 
-                    playsInline 
-                    muted 
-                    className={`absolute transition-all duration-300 ${
+                {/* 2. Local Camera (Field) - FOREGROUND LAYER (PiP) */}
+                {/* Displayed regardless of admin stream, but layout changes if admin stream is present */}
+                {/* If Admin Stream is ON: Local is PiP (Bottom Right) */}
+                {/* If Admin Stream is OFF: Local is Main (Full Screen) */}
+                <div 
+                    className={`transition-all duration-500 ease-in-out z-10 ${
                         adminStream 
-                        ? 'top-4 right-4 w-32 md:w-48 aspect-video rounded-lg border border-slate-600 shadow-2xl z-20 object-cover'
-                        : 'inset-0 w-full h-full object-cover z-0'
+                        ? 'absolute bottom-24 right-4 w-32 md:w-48 aspect-[3/4] md:aspect-video rounded-lg overflow-hidden border-2 border-slate-600 shadow-2xl' 
+                        : 'absolute inset-0 w-full h-full'
                     }`}
-                />
-                
-                {/* PiP Label for Local Camera when it is PiP */}
-                {adminStream && (
-                     <div className="absolute top-4 right-4 w-32 md:w-48 aspect-video z-30 pointer-events-none border-2 border-slate-500 rounded-lg">
-                         <div className="absolute bottom-0 left-0 w-full bg-slate-900/80 text-white text-[10px] text-center">現場</div>
-                     </div>
-                )}
+                >
+                    <video 
+                        ref={videoRef} 
+                        autoPlay 
+                        playsInline 
+                        muted 
+                        className="w-full h-full object-cover"
+                    />
+                    {adminStream && (
+                        <div className="absolute bottom-0 left-0 w-full bg-black/60 text-white text-[10px] text-center py-0.5 backdrop-blur-sm">
+                            自分
+                        </div>
+                    )}
+                </div>
                 
                 {/* Visual Alert Overlay (Calling) */}
                 {(incomingAlert || callStatus === 'incoming') && (
@@ -499,9 +504,8 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                 )}
                 
                 {/* Connection Status Overlay (Mobile) */}
-                {/* Hide if connected OR if in active call OR if admin stream is visible */}
                 {(!connectionStatus.includes('完了') && callStatus !== 'connected' && !adminStream) && (
-                    <div className="absolute top-4 left-4 right-4 bg-yellow-900/80 text-yellow-100 p-2 rounded text-center text-sm backdrop-blur border border-yellow-700/50 z-10">
+                    <div className="absolute top-4 left-4 right-4 bg-yellow-900/80 text-yellow-100 p-2 rounded text-center text-sm backdrop-blur border border-yellow-700/50 z-20">
                         <p className="font-bold mb-1">未接続: 管理者端末を探しています...</p>
                         <button 
                             onClick={onReconnect}
@@ -512,9 +516,9 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                     </div>
                 )}
                 
-                {/* Call Widget */}
-                <div className="absolute bottom-8 left-8 right-8 flex justify-between items-end z-40">
-                    <div className="bg-black/60 backdrop-blur-md p-4 rounded-xl border border-white/10 max-w-md">
+                {/* Call Widget - Positioned at bottom center, above the PiP line */}
+                <div className="absolute bottom-8 left-8 right-8 flex justify-center items-end z-40 pointer-events-none">
+                    <div className="pointer-events-auto bg-black/60 backdrop-blur-md p-4 rounded-xl border border-white/10">
                          {renderCallWidget()}
                     </div>
                 </div>
