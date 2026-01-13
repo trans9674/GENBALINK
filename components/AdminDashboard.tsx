@@ -42,7 +42,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     messages, 
     onSendMessage, 
     onTriggerAlert,
-    remoteStream,
+    remoteStream, 
     localStream,
     onStreamReady,
     connectionStatus,
@@ -108,11 +108,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // --- Toggle Camera (Switch between Camera and Screen Share or Off) ---
   const toggleCamera = async () => {
+    const wasScreenSharing = isScreenSharing;
+
     // 1. If currently sharing screen, stop it first, then start camera
-    if (isScreenSharing) {
-        stopScreenShare();
-        // Give a tiny tick for state to clear if needed, though usually sequential calls work
-        // However, to be safe, we proceed to start camera.
+    if (wasScreenSharing) {
+        // Internally stop screen share resources
+        if (displayStreamRef.current) {
+            displayStreamRef.current.getTracks().forEach(t => t.stop());
+            displayStreamRef.current = null;
+        }
+        if (screenVideoRef.current) {
+            screenVideoRef.current.srcObject = null;
+        }
+        setIsScreenSharing(false);
+        setShapes([]);
+        // Note: We do NOT call onStreamReady(null) here because we are about to switch streams immediately.
+        // Calling it would cause a flicker or potential race condition with the new stream.
     } else if (localStream) {
         // 2. If camera is on (and not screen sharing), just turn it off
         onStreamReady(null);
@@ -126,6 +137,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     } catch (e) {
         console.error("Camera Error", e);
         alert("カメラへのアクセスを許可してください");
+        // If we switched off screen share but failed to get camera, ensure we clear the stream state
+        if (wasScreenSharing) {
+            onStreamReady(null);
+        }
     }
   };
 
@@ -370,12 +385,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                  </button>
              ) : (
                  <button 
-                     onClick={onStartCall} 
-                     disabled={callStatus === 'outgoing'}
-                     className={`px-8 py-3.5 rounded-xl text-lg font-bold shadow-lg transition-all border flex items-center gap-3 ${callStatus === 'outgoing' ? 'bg-slate-600' : 'bg-blue-600 hover:bg-blue-500 text-white'}`}
+                     onClick={callStatus === 'outgoing' ? onEndCall : onStartCall} 
+                     className={`px-8 py-3.5 rounded-xl text-lg font-bold shadow-lg transition-all border flex items-center gap-3 ${
+                        callStatus === 'outgoing' 
+                        ? 'bg-red-500/80 border-red-500 text-white hover:bg-red-600 animate-pulse' 
+                        : 'bg-blue-600 hover:bg-blue-500 text-white'
+                     }`}
                  >
-                     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                     {callStatus === 'outgoing' ? '呼出中...' : '通話'}
+                     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        {callStatus === 'outgoing' ? (
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        ) : (
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                        )}
+                     </svg>
+                     {callStatus === 'outgoing' ? 'キャンセル' : '通話'}
                  </button>
              )}
 

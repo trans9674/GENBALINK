@@ -70,7 +70,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
         }}
     >
       <div className="p-4 border-b border-slate-800 bg-slate-900 flex justify-between items-center">
-        <h3 className="font-semibold text-slate-200">現場チャット</h3>
+        <h3 className="font-semibold text-slate-200 text-lg">現場チャット</h3>
         {isDragOver && <span className="text-xs text-blue-400 font-bold animate-pulse">ファイルをドロップして送信</span>}
       </div>
       
@@ -85,7 +85,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
             <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
               <div 
                 onClick={() => isUnread && onMarkRead && onMarkRead(msg.id)}
-                className={`max-w-[85%] rounded-lg p-3 text-sm transition-all cursor-pointer ${
+                className={`max-w-[85%] rounded-lg p-3 text-base transition-all cursor-pointer ${
                   isMe 
                     ? 'bg-blue-600 text-white' 
                     : isAI 
@@ -188,7 +188,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder="メッセージを入力..."
-            className="flex-1 bg-slate-800 border-slate-700 border rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+            className="flex-1 bg-slate-800 border-slate-700 border rounded-md px-3 py-2 text-base text-white focus:outline-none focus:border-blue-500"
           />
           <button
             onClick={handleSend}

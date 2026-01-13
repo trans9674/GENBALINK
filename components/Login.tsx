@@ -68,12 +68,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">お名前 (Display Name)</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">お名前</label>
               <input 
                 type="text" 
                 value={name}
                 onChange={(e) => { setName(e.target.value); setError(''); }}
-                placeholder="例: 松岡 (現場側は自動で「現地」になります)"
+                placeholder="例：山田"
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
               />
             </div>
