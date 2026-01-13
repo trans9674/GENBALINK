@@ -3,12 +3,13 @@ import { ChatMessage } from '../types';
 import ChatInterface from './ChatInterface';
 
 interface AdminDashboardProps {
+  siteId: string;
   messages: ChatMessage[];
   onSendMessage: (text: string) => void;
   onTriggerAlert: () => void;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ messages, onSendMessage, onTriggerAlert }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ siteId, messages, onSendMessage, onTriggerAlert }) => {
   return (
     <div className="h-screen flex flex-col bg-slate-950">
       {/* Header */}
@@ -17,7 +18,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ messages, onSendMessage
             <h1 className="text-lg font-bold text-white tracking-widest">GENBA<span className="text-orange-500">LINK</span> <span className="text-slate-500 text-sm ml-2 font-normal">管理者コンソール</span></h1>
             <nav className="hidden md:flex space-x-4">
                 <button className="text-slate-300 hover:text-white text-sm font-medium">ダッシュボード</button>
-                <button className="text-blue-400 border-b-2 border-blue-400 text-sm font-medium pb-4 -mb-4">ライブ監視</button>
+                <button className="text-blue-400 border-b-2 border-blue-400 text-sm font-medium pb-4 -mb-4">ライブ監視: {siteId}</button>
                 <button className="text-slate-300 hover:text-white text-sm font-medium">レポート</button>
             </nav>
         </div>
@@ -28,7 +29,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ messages, onSendMessage
              >
                 現場への警告 / 起動
              </button>
-             <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold">管理者</div>
+             <div className="flex flex-col items-end">
+                <div className="text-xs font-bold text-slate-300">Admin User</div>
+                <div className="text-[10px] text-slate-500">HQ-东京</div>
+             </div>
+             <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold">A</div>
         </div>
       </div>
 
@@ -41,7 +46,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ messages, onSendMessage
                     <div className="p-3 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
                         <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
-                            <span className="text-sm font-mono text-slate-300">現場ユニット04 - ライブ中</span>
+                            <span className="text-sm font-mono text-slate-300">{siteId} - ライブ中</span>
                         </div>
                         <span className="text-xs text-slate-500">1080p | 30fps</span>
                     </div>

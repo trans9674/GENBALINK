@@ -6,24 +6,23 @@ import FieldDashboard from './components/FieldDashboard';
 
 const App: React.FC = () => {
   const [currentRole, setCurrentRole] = useState<UserRole>(UserRole.NONE);
+  const [siteId, setSiteId] = useState<string>("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  // In a real app, this would be a socket event.
-  // For this demo, we simulate the "alert" state passing from Admin to Field component if they were connected.
-  // Since we switch views, we can't easily show Admin pressing button AND Field waking up simultaneously 
-  // without a backend or split screen. 
-  // However, we will maintain the state variable to show how it's wired.
   const [incomingAlert, setIncomingAlert] = useState(false);
 
-  // Load initial welcome message
-  useEffect(() => {
+  const handleLogin = (role: UserRole, id: string) => {
+    setSiteId(id);
+    setCurrentRole(role);
+    
+    // Welcome message with Site ID
     setMessages([{
       id: 'welcome',
       sender: 'AI',
-      text: 'システム初期化完了。GenbaLink稼働中。',
+      text: `接続完了: ${id}。システム正常稼働中。`,
       timestamp: new Date(),
       isRead: true
     }]);
-  }, []);
+  };
 
   const handleSendMessage = (text: string) => {
     const newMessage: ChatMessage = {
@@ -44,7 +43,7 @@ const App: React.FC = () => {
   const handleTranscription = (text: string, type: 'user' | 'model') => {
     const newMessage: ChatMessage = {
       id: Date.now().toString() + Math.random(),
-      sender: type === 'user' ? 'User' : 'AI', // 'User' here effectively means 'Field Worker Voice'
+      sender: type === 'user' ? 'User' : 'AI', 
       text,
       timestamp: new Date(),
       isRead: true
@@ -54,19 +53,20 @@ const App: React.FC = () => {
 
   const handleAdminAlert = () => {
     // In a real app, send socket event to field unit
-    alert("現場端末へアラート信号を送信しました（シミュレーション）");
+    alert(`現場端末 (${siteId}) へアラート信号を送信しました`);
     setIncomingAlert(true);
     // Reset alert state after a few seconds so it can be triggered again
     setTimeout(() => setIncomingAlert(false), 5000);
   };
 
   if (currentRole === UserRole.NONE) {
-    return <Login onSelectRole={setCurrentRole} />;
+    return <Login onLogin={handleLogin} />;
   }
 
   if (currentRole === UserRole.ADMIN) {
     return (
       <AdminDashboard 
+        siteId={siteId}
         messages={messages} 
         onSendMessage={handleSendMessage} 
         onTriggerAlert={handleAdminAlert}
@@ -76,6 +76,7 @@ const App: React.FC = () => {
 
   return (
     <FieldDashboard 
+      siteId={siteId}
       messages={messages} 
       onSendMessage={handleSendMessage} 
       onTranscription={handleTranscription}

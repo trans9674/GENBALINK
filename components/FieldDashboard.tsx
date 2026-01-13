@@ -4,6 +4,7 @@ import ChatInterface from './ChatInterface';
 import { useGenAiLive } from '../hooks/useGenAiLive';
 
 interface FieldDashboardProps {
+  siteId: string;
   messages: ChatMessage[];
   onSendMessage: (text: string) => void;
   onTranscription: (text: string, type: 'user' | 'model') => void;
@@ -12,6 +13,7 @@ interface FieldDashboardProps {
 }
 
 const FieldDashboard: React.FC<FieldDashboardProps> = ({ 
+  siteId,
   messages, 
   onSendMessage, 
   onTranscription,
@@ -102,7 +104,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
       >
         <div className="text-6xl font-bold animate-pulse mb-8">ECO MODE</div>
         <div className="text-xl">画面をタッチして復帰</div>
-        <div className="mt-8 text-sm text-green-900">GenbaLink 監視中</div>
+        <div className="mt-8 text-sm text-green-900">{siteId} 監視中</div>
         <div className="absolute bottom-10 animate-bounce">
             {incomingAlert ? "⚠️ 緊急アラート着信" : "システム正常"}
         </div>
@@ -116,7 +118,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
       <div className="h-16 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-6">
         <div className="flex items-center gap-4">
             <h1 className="text-xl font-bold text-white tracking-wider">GENBA<span className="text-orange-500">LINK</span></h1>
-            <span className="px-3 py-1 bg-blue-900 text-blue-200 text-xs rounded-full border border-blue-700">現場ユニット #04</span>
+            <span className="px-3 py-1 bg-blue-900 text-blue-200 text-xs rounded-full border border-blue-700">{siteId}</span>
         </div>
         <div className="flex items-center gap-4">
             <button 
