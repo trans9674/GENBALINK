@@ -1,47 +1,90 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { ChatMessage } from '../types';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { ChatMessage, Attachment, CallStatus } from '../types';
 import ChatInterface from './ChatInterface';
-import { useGenAiLive } from '../hooks/useGenAiLive';
 
 interface FieldDashboardProps {
   siteId: string;
   messages: ChatMessage[];
-  onSendMessage: (text: string) => void;
-  onTranscription: (text: string, type: 'user' | 'model') => void;
+  onSendMessage: (text: string, attachment?: Attachment) => void;
   incomingAlert: boolean;
   onClearAlert: () => void;
   onStreamReady: (stream: MediaStream) => void;
-  adminStream: MediaStream | null; // Added: Admin's video stream
+  adminStream: MediaStream | null; 
   connectionStatus: string;
-  onReconnect?: () => void; 
+  onReconnect?: () => void;
+  callStatus: CallStatus;
+  onStartCall: () => void;
+  onAcceptCall: () => void;
+  onEndCall: () => void;
+  onTranscription: (text: string, type: 'user' | 'model') => void; // Prop signature maintained for compatibility
 }
 
 const FieldDashboard: React.FC<FieldDashboardProps> = ({ 
   siteId,
   messages, 
   onSendMessage, 
-  onTranscription,
   incomingAlert,
-  onClearAlert,
   onStreamReady,
   adminStream,
   connectionStatus,
-  onReconnect
+  onReconnect,
+  callStatus,
+  onStartCall,
+  onAcceptCall,
+  onEndCall
 }) => {
   const [ecoMode, setEcoMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'camera' | 'chat'>('camera');
   const videoRef = useRef<HTMLVideoElement>(null);
-  const adminVideoRef = useRef<HTMLVideoElement>(null); // Added
+  const adminVideoRef = useRef<HTMLVideoElement>(null); 
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  const inactivityTimerRef = useRef<number | null>(null);
 
-  const { connect, disconnect, isConnected, isSpeaking, volume } = useGenAiLive({
-    apiKey: process.env.API_KEY,
-    systemInstruction: "あなたは建設現場の安全管理を行うプロフェッショナルなAIアシスタントです。日本語で簡潔に話してください。安全違反や危険な状況を検知したら直ちに警告してください。",
-    onTranscription: (text, type) => {
-        if (ecoMode) setEcoMode(false); 
-        onTranscription(text, type);
+  // Attendance State
+  const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [attendanceStep, setAttendanceStep] = useState<'menu' | 'input' | 'result'>('menu');
+  const [attendanceType, setAttendanceType] = useState<'start' | 'end'>('start');
+  const [workerName, setWorkerName] = useState('');
+  const [currentTime, setCurrentTime] = useState('');
+
+  // --- Auto Eco Mode Logic ---
+  const resetInactivityTimer = useCallback(() => {
+    if (ecoMode) setEcoMode(false);
+    
+    if (inactivityTimerRef.current) {
+        window.clearTimeout(inactivityTimerRef.current);
     }
-  });
+    // Set timer for 2 minutes (120,000 ms)
+    inactivityTimerRef.current = window.setTimeout(() => {
+        setEcoMode(true);
+    }, 120000); 
+  }, [ecoMode]);
+
+  // Initial setup and global events for inactivity
+  useEffect(() => {
+    resetInactivityTimer();
+    
+    const events = ['mousedown', 'touchstart', 'mousemove', 'keypress', 'click'];
+    const handler = () => resetInactivityTimer();
+    
+    events.forEach(ev => window.addEventListener(ev, handler));
+    
+    return () => {
+        events.forEach(ev => window.removeEventListener(ev, handler));
+        if (inactivityTimerRef.current) window.clearTimeout(inactivityTimerRef.current);
+    };
+  }, [resetInactivityTimer]);
+
+  // Wake up on incoming messages or alert or call
+  useEffect(() => {
+    if (messages.length > 0 || incomingAlert || callStatus === 'incoming') {
+        if (ecoMode) {
+            setEcoMode(false);
+            resetInactivityTimer();
+        }
+    }
+  }, [messages.length, incomingAlert, callStatus, resetInactivityTimer]);
+
 
   // Handle Wake Lock
   useEffect(() => {
@@ -88,79 +131,270 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   useEffect(() => {
     if (adminVideoRef.current && adminStream) {
         adminVideoRef.current.srcObject = adminStream;
-        // Do NOT mute admin stream, we want to hear them
-        // But for testing on same device, it might echo. In production, no mute.
         adminVideoRef.current.play().catch(e => console.error("Admin video play error", e));
     }
   }, [adminStream]);
 
   // Handle Alert Sound & Visuals
   useEffect(() => {
-    if (incomingAlert) {
-      // 1. EcoMode解除
-      if (ecoMode) {
-        setEcoMode(false);
-      }
+    if (incomingAlert || callStatus === 'incoming') {
+      if (ecoMode) setEcoMode(false);
 
-      // 2. Play Chime Sound (Ding-Dong-Dang-Dong)
+      // 2. Play Chime Sound
       try {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioContext) {
           const ctx = new AudioContext();
-          
           const playTone = (freq: number, time: number, duration: number) => {
               const osc = ctx.createOscillator();
               const gain = ctx.createGain();
-              
               osc.connect(gain);
               gain.connect(ctx.destination);
-              
-              osc.type = 'sine'; // Sine wave for chime
+              osc.type = 'sine';
               osc.frequency.setValueAtTime(freq, time);
-              
-              // Envelope
               gain.gain.setValueAtTime(0, time);
               gain.gain.linearRampToValueAtTime(0.5, time + 0.05);
               gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
-              
               osc.start(time);
               osc.stop(time + duration);
           };
-
           const now = ctx.currentTime;
-          // Chime melody: E5, C5, G5, C6 (classic 4-note chime)
-          // E5 = 659.25, C5 = 523.25, G5 = 783.99, C6 = 1046.50
+          // Different ringtone for call vs alert?
           playTone(660, now, 0.6);
           playTone(523, now + 0.5, 0.6);
           playTone(784, now + 1.0, 0.6);
           playTone(1046, now + 1.5, 1.2);
-
         }
       } catch (e) {
         console.error("Audio playback failed", e);
       }
     }
-  }, [incomingAlert, ecoMode]);
+  }, [incomingAlert, callStatus, ecoMode]);
+
+  // Attendance Logic
+  useEffect(() => {
+    if (showAttendanceModal) {
+      const timer = setInterval(() => {
+        setCurrentTime(new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }));
+      }, 1000);
+      setCurrentTime(new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }));
+      return () => clearInterval(timer);
+    }
+  }, [showAttendanceModal]);
+
+  const handleSubmitAttendance = () => {
+    if (!workerName.trim()) return;
+    resetInactivityTimer();
+    
+    const now = new Date();
+    let logText = '';
+    
+    if (attendanceType === 'start') {
+        logText = `【勤怠:開始】${workerName}さんが作業を開始しました。 (時刻: ${currentTime})`;
+    } else {
+        const lastStart = [...messages].reverse().find(m => m.text.includes(`【勤怠:開始】${workerName}`));
+        let durationInfo = '';
+        if (lastStart) {
+            const diff = now.getTime() - new Date(lastStart.timestamp).getTime();
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            durationInfo = ` [作業時間: ${hours}時間${minutes}分]`;
+        }
+        logText = `【勤怠:終了】${workerName}さんが作業を終了しました。${durationInfo} (時刻: ${currentTime})`;
+    }
+    
+    onSendMessage(logText);
+    setAttendanceStep('result');
+  };
+
+  // --- Render Call Widget ---
+  const renderCallWidget = () => {
+      switch (callStatus) {
+          case 'incoming':
+              return (
+                  <div className="flex flex-col items-center gap-2 animate-bounce">
+                      <div className="text-white font-bold bg-red-600 px-3 py-1 rounded-full text-sm mb-1 shadow-lg">着信中...</div>
+                      <div className="flex gap-4">
+                          <button 
+                              onClick={onAcceptCall}
+                              className="w-16 h-16 bg-green-500 hover:bg-green-400 rounded-full flex items-center justify-center shadow-lg border-2 border-white"
+                          >
+                              <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                          </button>
+                          <button 
+                              onClick={onEndCall}
+                              className="w-16 h-16 bg-red-600 hover:bg-red-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white"
+                          >
+                               <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                      </div>
+                  </div>
+              );
+          case 'outgoing':
+               return (
+                  <div className="flex flex-col items-center gap-2">
+                       <div className="text-white font-bold animate-pulse text-sm mb-1">呼び出し中...</div>
+                       <button 
+                          onClick={onEndCall}
+                          className="w-16 h-16 bg-red-600 hover:bg-red-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white"
+                       >
+                           <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                       </button>
+                  </div>
+               );
+          case 'connected':
+               return (
+                  <div className="flex flex-col items-center gap-2">
+                       <div className="text-green-400 font-bold text-sm mb-1 border border-green-500/50 bg-green-900/50 px-2 rounded">通話中</div>
+                       <button 
+                          onClick={onEndCall}
+                          className="w-16 h-16 bg-red-600 hover:bg-red-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white animate-pulse"
+                       >
+                           <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.516l2.257-1.13a1 1 0 00.502-1.21L8.228 3.683A1 1 0 007.28 3H5z" /></svg>
+                       </button>
+                  </div>
+               );
+          default: // idle
+               return (
+                   <div className="flex flex-col items-center gap-2">
+                       <div className="text-xs text-slate-400 mb-1">管理者と会話</div>
+                       <button 
+                           onClick={onStartCall}
+                           className="w-16 h-16 bg-blue-600 hover:bg-blue-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white/20 transition-transform active:scale-95"
+                       >
+                            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                            </svg>
+                       </button>
+                   </div>
+               );
+      }
+  };
+
 
   if (ecoMode) {
     return (
       <div 
-        className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center text-green-500 font-mono"
-        onClick={() => setEcoMode(false)}
+        className="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center text-green-500 font-mono cursor-pointer"
+        onClick={() => resetInactivityTimer()}
       >
         <div className="text-6xl font-bold animate-pulse mb-8">ECO MODE</div>
         <div className="text-xl">画面をタッチして復帰</div>
         <div className="mt-8 text-sm text-green-900">{siteId} 監視中</div>
         <div className="mt-2 text-xs text-green-800">通信状態: {connectionStatus}</div>
         <div className="absolute bottom-10 animate-bounce">
-            {incomingAlert ? "🔔 管理者からの呼出し" : "システム正常"}
+            {(incomingAlert || callStatus === 'incoming') ? "🔔 管理者からの呼出し" : "システム正常"}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex flex-col bg-slate-950">
+    <div className="h-screen flex flex-col bg-slate-950 relative">
+      {/* Attendance Modal */}
+      {showAttendanceModal && (
+        <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-6 shadow-2xl relative">
+                <button 
+                    onClick={() => { setShowAttendanceModal(false); resetInactivityTimer(); }}
+                    className="absolute top-4 right-4 text-slate-400 hover:text-white"
+                >
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+
+                <div className="text-center mb-6">
+                    <h2 className="text-2xl font-bold text-white tracking-wider">勤怠管理</h2>
+                    <div className="text-sm text-slate-400 mt-1">{siteId}</div>
+                </div>
+
+                {attendanceStep === 'menu' && (
+                    <div className="grid grid-cols-2 gap-4">
+                        <button 
+                            onClick={() => { setAttendanceType('start'); setAttendanceStep('input'); resetInactivityTimer(); }}
+                            className="aspect-square bg-blue-600 hover:bg-blue-500 rounded-xl flex flex-col items-center justify-center gap-2 transition-all active:scale-95"
+                        >
+                             <svg className="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                             <span className="font-bold text-lg text-white">作業開始</span>
+                        </button>
+                        <button 
+                            onClick={() => { setAttendanceType('end'); setAttendanceStep('input'); resetInactivityTimer(); }}
+                            className="aspect-square bg-orange-600 hover:bg-orange-500 rounded-xl flex flex-col items-center justify-center gap-2 transition-all active:scale-95"
+                        >
+                             <svg className="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                             <span className="font-bold text-lg text-white">作業終了</span>
+                        </button>
+                    </div>
+                )}
+
+                {attendanceStep === 'input' && (
+                    <div className="space-y-6">
+                         <div className={`text-center py-2 rounded font-bold text-white ${attendanceType === 'start' ? 'bg-blue-600/50' : 'bg-orange-600/50'}`}>
+                             {attendanceType === 'start' ? '作業開始' : '作業終了'}
+                         </div>
+                         
+                         <div className="text-center">
+                             <div className="text-sm text-slate-400 mb-1">現在時刻</div>
+                             <div className="text-4xl font-mono font-bold text-white">{currentTime}</div>
+                         </div>
+
+                         <div>
+                             <label className="block text-xs font-bold text-slate-400 mb-2">お名前</label>
+                             <input 
+                                type="text" 
+                                value={workerName}
+                                onChange={(e) => { setWorkerName(e.target.value); resetInactivityTimer(); }}
+                                placeholder="名前を入力してください"
+                                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-4 text-lg text-white text-center focus:border-blue-500 focus:outline-none"
+                             />
+                         </div>
+
+                         <button 
+                            onClick={handleSubmitAttendance}
+                            disabled={!workerName.trim()}
+                            className={`w-full py-4 rounded-lg font-bold text-white text-lg transition-all ${
+                                !workerName.trim() 
+                                ? 'bg-slate-700 cursor-not-allowed opacity-50' 
+                                : attendanceType === 'start' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-orange-600 hover:bg-orange-500'
+                            }`}
+                         >
+                             記録する
+                         </button>
+                    </div>
+                )}
+
+                {attendanceStep === 'result' && (
+                    <div className="text-center space-y-6 py-4">
+                        <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto animate-bounce">
+                             <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                        </div>
+                        
+                        <h3 className="text-xl font-bold text-white">記録しました</h3>
+                        
+                        <div className="p-4 bg-slate-800 rounded-lg border border-slate-700 text-slate-200">
+                            {attendanceType === 'start' ? (
+                                <div>
+                                    <p className="font-bold text-blue-400 mb-2">現場から帰られる際にも<br/>入力お願いします</p>
+                                    <p className="text-xs text-slate-400">ご安全に！</p>
+                                </div>
+                            ) : (
+                                <div>
+                                    <p className="font-bold text-orange-400 mb-2">今日も一日<br/>お疲れ様でした！</p>
+                                </div>
+                            )}
+                        </div>
+
+                        <button 
+                            onClick={() => { setShowAttendanceModal(false); resetInactivityTimer(); }}
+                            className="w-full py-3 bg-slate-700 hover:bg-slate-600 rounded-lg text-white font-bold"
+                        >
+                            閉じる
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+      )}
+
       {/* Top Bar */}
       <div className="h-16 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-6">
         <div className="flex items-center gap-4">
@@ -189,7 +423,6 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                 <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
                 エコモード
             </button>
-            <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
         </div>
       </div>
 
@@ -209,7 +442,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
 
                 {/* Admin Stream Overlay (PiP) */}
                 {adminStream && (
-                    <div className="absolute top-4 right-4 w-32 md:w-48 aspect-video bg-slate-900 rounded-lg border-2 border-blue-500 overflow-hidden shadow-2xl z-20">
+                    <div className={`absolute top-4 right-4 w-32 md:w-48 aspect-video bg-slate-900 rounded-lg border-2 ${callStatus === 'connected' ? 'border-green-500' : 'border-blue-500'} overflow-hidden shadow-2xl z-20`}>
                          <video 
                             ref={adminVideoRef} 
                             autoPlay 
@@ -221,7 +454,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                 )}
                 
                 {/* Visual Alert Overlay (Calling) */}
-                {incomingAlert && (
+                {(incomingAlert || callStatus === 'incoming') && (
                     <div className="absolute inset-0 z-50 pointer-events-none border-[12px] border-blue-500/80 animate-pulse flex items-center justify-center bg-blue-900/20">
                         <div className="bg-blue-600 text-white font-black text-4xl md:text-5xl px-8 py-8 rounded-2xl shadow-2xl animate-bounce tracking-widest border-4 border-white flex flex-col items-center gap-4">
                             <span className="text-6xl">🔔</span>
@@ -243,58 +476,27 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                     </div>
                 )}
                 
-                {/* AI Visualizer Overlay */}
+                {/* Call Widget (Replaces AI Visualizer) */}
                 <div className="absolute bottom-8 left-8 right-8 flex justify-between items-end">
                     <div className="bg-black/60 backdrop-blur-md p-4 rounded-xl border border-white/10 max-w-md">
-                         <div className="text-xs text-slate-400 mb-1">AIアシスタント ステータス</div>
-                         <div className="flex items-center gap-4">
-                             <button
-                                onClick={isConnected ? disconnect : connect}
-                                className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
-                                    isConnected ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
-                                }`}
-                             >
-                                {isConnected ? (
-                                    <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                    </svg>
-                                ) : (
-                                    <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                                    </svg>
-                                )}
-                             </button>
-                             <div className="flex-1">
-                                 <div className="text-white font-medium mb-1">
-                                    {isConnected ? (isSpeaking ? "AI発話中..." : "聞き取り中...") : "AI未接続"}
-                                 </div>
-                                 <div className="flex items-end gap-1 h-8">
-                                    {[...Array(5)].map((_, i) => (
-                                        <div 
-                                            key={i} 
-                                            className="w-2 bg-blue-500 transition-all duration-75 rounded-t"
-                                            style={{ 
-                                                height: isConnected ? `${Math.max(10, Math.min(100, volume * 1000 * (Math.random() + 0.5)))}%` : '10%',
-                                                opacity: isConnected ? 1 : 0.3
-                                            }}
-                                        />
-                                    ))}
-                                 </div>
-                             </div>
-                         </div>
+                         {renderCallWidget()}
                     </div>
                 </div>
             </div>
           )}
           {activeTab === 'chat' && (
-             <ChatInterface messages={messages} onSendMessage={onSendMessage} role="Field" />
+             <ChatInterface 
+                messages={messages} 
+                onSendMessage={onSendMessage} 
+                role="Field" 
+             />
           )}
         </div>
 
         {/* Sidebar Tabs */}
         <div className="w-24 bg-slate-900 border-l border-slate-700 flex flex-col">
             <button 
-                onClick={() => setActiveTab('camera')}
+                onClick={() => { setActiveTab('camera'); resetInactivityTimer(); }}
                 className={`flex-1 flex flex-col items-center justify-center gap-2 border-b border-slate-700 ${activeTab === 'camera' ? 'bg-slate-800 text-blue-400' : 'text-slate-400'}`}
             >
                  <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -303,8 +505,8 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                 <span className="text-xs font-bold">ライブ</span>
             </button>
             <button 
-                onClick={() => setActiveTab('chat')}
-                className={`flex-1 flex flex-col items-center justify-center gap-2 ${activeTab === 'chat' ? 'bg-slate-800 text-blue-400' : 'text-slate-400'}`}
+                onClick={() => { setActiveTab('chat'); resetInactivityTimer(); }}
+                className={`flex-1 flex flex-col items-center justify-center gap-2 border-b border-slate-700 ${activeTab === 'chat' ? 'bg-slate-800 text-blue-400' : 'text-slate-400'}`}
             >
                 <div className="relative">
                     <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -315,6 +517,21 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                     )}
                 </div>
                 <span className="text-xs font-bold">チャット</span>
+            </button>
+            
+            {/* Attendance Button */}
+            <button 
+                onClick={() => {
+                    setShowAttendanceModal(true);
+                    setAttendanceStep('menu');
+                    resetInactivityTimer();
+                }}
+                className={`flex-1 flex flex-col items-center justify-center gap-2 ${showAttendanceModal ? 'bg-slate-800 text-blue-400' : 'text-slate-400'}`}
+            >
+                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                </svg>
+                <span className="text-xs font-bold">入退場</span>
             </button>
         </div>
       </div>

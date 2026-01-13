@@ -4,12 +4,19 @@ export enum UserRole {
   FIELD = 'FIELD'
 }
 
+export interface Attachment {
+  type: 'image' | 'pdf';
+  url: string; // Base64 Data URI
+  name: string;
+}
+
 export interface ChatMessage {
   id: string;
   sender: 'User' | 'AI' | 'Admin' | 'Field';
   text: string;
   timestamp: Date;
   isRead?: boolean;
+  attachment?: Attachment;
 }
 
 export interface LiveState {
@@ -17,3 +24,5 @@ export interface LiveState {
   isSpeaking: boolean;
   volume: number;
 }
+
+export type CallStatus = 'idle' | 'outgoing' | 'incoming' | 'connected';

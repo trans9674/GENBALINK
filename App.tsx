@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { UserRole, ChatMessage } from './types';
+import { UserRole, ChatMessage, Attachment, CallStatus } from './types';
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
 import FieldDashboard from './components/FieldDashboard';
@@ -13,9 +13,12 @@ const App: React.FC = () => {
   
   // remoteStream: 相手の映像 (AdminにとってはFieldの映像、FieldにとってはAdminの映像)
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
-  // localStream: 自分の映像 (Fieldは常時、Adminは任意)
+  // localStream: 自分の映像 (Fieldは常時、Adminは任意/画面共有)
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [peerStatus, setPeerStatus] = useState<string>('未接続');
+  
+  // Call State
+  const [callStatus, setCallStatus] = useState<CallStatus>('idle');
 
   const peerRef = useRef<Peer | null>(null);
   const connRef = useRef<DataConnection | null>(null);
@@ -39,6 +42,12 @@ const App: React.FC = () => {
     } else if (type === 'REQUEST_STREAM') {
        // 現場側: 映像要求を受け取ったらトリガーイベント発火
        window.dispatchEvent(new CustomEvent('TRIGGER_CALL_ADMIN'));
+    } else if (type === 'CALL_START') {
+        setCallStatus('incoming');
+    } else if (type === 'CALL_ACCEPT') {
+        setCallStatus('connected');
+    } else if (type === 'CALL_END') {
+        setCallStatus('idle');
     }
   }, []);
 
@@ -61,6 +70,7 @@ const App: React.FC = () => {
          console.log("Connection closed remote");
          setPeerStatus('切断: 再接続待機中...');
          connRef.current = null;
+         setCallStatus('idle');
          startConnectionRetry();
       });
       
@@ -123,10 +133,9 @@ const App: React.FC = () => {
       conn.on('open', () => setupConnection(conn));
     });
 
-    // 映像着信処理 (AdminもFieldも共通で受けられるようにする)
+    // 映像着信処理
     peer.on('call', (call) => {
       console.log('Incoming Video Call from:', call.peer);
-      // 着信に応答 (Receive OnlyでOK)
       call.answer(); 
       call.on('stream', (stream) => {
         console.log("Remote Stream Received");
@@ -177,34 +186,58 @@ const App: React.FC = () => {
   }, [currentRole, siteId, localStream]);
 
 
-  // --- 管理者用: カメラ配信切り替え ---
-  const toggleAdminCamera = async () => {
+  // --- 管理者用: ストリーム更新処理 (カメラ or 画面共有) ---
+  const handleAdminStreamChange = useCallback((stream: MediaStream | null) => {
+      // 既存のストリームがあれば停止
       if (localStream) {
-          // 停止処理
           localStream.getTracks().forEach(track => track.stop());
-          setLocalStream(null);
-          if (mediaConnRef.current) {
-              mediaConnRef.current.close();
-              mediaConnRef.current = null;
-          }
-      } else {
-          // 開始処理
-          try {
-              const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-              setLocalStream(stream);
-              
-              // 現場へ発信
-              if (peerRef.current) {
-                  const targetId = siteId;
-                  console.log(`Calling Field (${targetId}) with admin stream...`);
-                  const call = peerRef.current.call(targetId, stream);
-                  mediaConnRef.current = call;
-              }
-          } catch (e) {
-              console.error("Admin camera error:", e);
-              alert("カメラ・マイクへのアクセスを許可してください");
+      }
+      if (mediaConnRef.current) {
+          mediaConnRef.current.close();
+          mediaConnRef.current = null;
+      }
+
+      setLocalStream(stream);
+
+      // 新しいストリームがあれば発信
+      if (stream && peerRef.current) {
+          const targetId = siteId;
+          console.log(`Calling Field (${targetId}) with updated stream...`);
+          const call = peerRef.current.call(targetId, stream);
+          mediaConnRef.current = call;
+      }
+  }, [localStream, siteId]);
+
+
+  // --- Call Control Logic ---
+  const startCall = () => {
+      if (connRef.current && connRef.current.open) {
+          connRef.current.send({ type: 'CALL_START' });
+          setCallStatus('outgoing');
+      }
+  };
+
+  const acceptCall = async () => {
+      if (connRef.current && connRef.current.open) {
+          connRef.current.send({ type: 'CALL_ACCEPT' });
+          setCallStatus('connected');
+          
+          // Ensure we are sending video/audio if not already
+          if (currentRole === UserRole.ADMIN && !localStream) {
+              // Admin might want to start camera on answer if not sharing screen
+             try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                handleAdminStreamChange(stream);
+             } catch(e) { console.error("Auto cam start failed", e); }
           }
       }
+  };
+
+  const endCall = () => {
+      if (connRef.current && connRef.current.open) {
+          connRef.current.send({ type: 'CALL_END' });
+      }
+      setCallStatus('idle');
   };
 
 
@@ -227,25 +260,14 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSendMessage = (text: string) => {
+  const handleSendMessage = (text: string, attachment?: Attachment) => {
     const newMessage: ChatMessage = {
       id: Date.now().toString() + Math.random().toString().slice(2, 5),
       sender: currentRole === UserRole.ADMIN ? 'Admin' : 'Field',
       text,
       timestamp: new Date(),
-      isRead: false
-    };
-    setMessages(prev => [...prev, newMessage]);
-    sendMessageToPeer(newMessage);
-  };
-
-  const handleTranscription = (text: string, type: 'user' | 'model') => {
-    const newMessage: ChatMessage = {
-      id: Date.now().toString() + Math.random(),
-      sender: type === 'user' ? 'User' : 'AI', 
-      text,
-      timestamp: new Date(),
-      isRead: true
+      isRead: false,
+      attachment // Add attachment if exists
     };
     setMessages(prev => [...prev, newMessage]);
     sendMessageToPeer(newMessage);
@@ -283,10 +305,14 @@ const App: React.FC = () => {
         onSendMessage={handleSendMessage} 
         onTriggerAlert={handleAdminAlert}
         remoteStream={remoteStream}
-        localStream={localStream} // Admin's own camera
-        onToggleCamera={toggleAdminCamera} // Toggle function
+        localStream={localStream}
+        onStreamReady={handleAdminStreamChange}
         connectionStatus={peerStatus}
         onRequestStream={requestStream}
+        callStatus={callStatus}
+        onStartCall={startCall}
+        onAcceptCall={acceptCall}
+        onEndCall={endCall}
       />
     );
   }
@@ -296,13 +322,18 @@ const App: React.FC = () => {
       siteId={siteId}
       messages={messages} 
       onSendMessage={handleSendMessage} 
-      onTranscription={handleTranscription}
+      // onTranscription removed as AI is disabled
+      onTranscription={() => {}}
       incomingAlert={incomingAlert}
       onClearAlert={() => setIncomingAlert(false)}
       onStreamReady={(stream) => setLocalStream(stream)}
-      adminStream={remoteStream} // Admin's video stream for Field
+      adminStream={remoteStream}
       connectionStatus={peerStatus}
       onReconnect={handleManualReconnect}
+      callStatus={callStatus}
+      onStartCall={startCall}
+      onAcceptCall={acceptCall}
+      onEndCall={endCall}
     />
   );
 };
