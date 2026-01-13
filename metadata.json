@@ -1,0 +1,8 @@
+{
+  "name": "genbalink-v2",
+  "description": "Next-generation remote site management platform with AI assistance, real-time monitoring, and field-optimized controls.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
