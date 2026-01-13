@@ -10,6 +10,8 @@ interface FieldDashboardProps {
   onTranscription: (text: string, type: 'user' | 'model') => void;
   incomingAlert: boolean;
   onClearAlert: () => void;
+  onStreamReady: (stream: MediaStream) => void;
+  connectionStatus: string;
 }
 
 const FieldDashboard: React.FC<FieldDashboardProps> = ({ 
@@ -18,7 +20,9 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   onSendMessage, 
   onTranscription,
   incomingAlert,
-  onClearAlert
+  onClearAlert,
+  onStreamReady,
+  connectionStatus
 }) => {
   const [ecoMode, setEcoMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'camera' | 'chat'>('camera');
@@ -29,7 +33,6 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
     apiKey: process.env.API_KEY,
     systemInstruction: "あなたは建設現場の安全管理を行うプロフェッショナルなAIアシスタントです。日本語で簡潔に話してください。安全違反や危険な状況を検知したら直ちに警告してください。",
     onTranscription: (text, type) => {
-        // Exit Eco Mode on AI interaction
         if (ecoMode) setEcoMode(false); 
         onTranscription(text, type);
     }
@@ -41,30 +44,14 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
       try {
         if ('wakeLock' in navigator) {
           wakeLockRef.current = await navigator.wakeLock.request('screen');
-          console.log('Wake Lock active');
-          wakeLockRef.current.addEventListener('release', () => {
-            console.log('Wake Lock released');
-          });
         }
       } catch (err) {
         console.error(`${err.name}, ${err.message}`);
       }
     };
-
     requestWakeLock();
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && wakeLockRef.current === null) {
-        requestWakeLock();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
       wakeLockRef.current?.release();
-      wakeLockRef.current = null;
     };
   }, []);
 
@@ -72,13 +59,21 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   useEffect(() => {
     const startCamera = async () => {
       try {
+        // Video and Audio for WebRTC
         const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'environment' }, // Back camera for field work
-            audio: false 
+            video: { facingMode: 'environment' }, 
+            audio: true 
         });
+        
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          // Mute local playback to prevent feedback loop
+          videoRef.current.muted = true;
         }
+        
+        // Pass stream up for PeerJS
+        onStreamReady(stream);
+
       } catch (e) {
         console.error("Camera failed", e);
       }
@@ -86,16 +81,13 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
     startCamera();
   }, []);
 
-  // Handle Incoming Alert/Wake from Eco Mode
   useEffect(() => {
     if (incomingAlert && ecoMode) {
       setEcoMode(false);
       onClearAlert();
-      // Play a sound or vibrate here in a real app
     }
   }, [incomingAlert, ecoMode, onClearAlert]);
 
-  // Eco Mode Overlay
   if (ecoMode) {
     return (
       <div 
@@ -105,6 +97,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
         <div className="text-6xl font-bold animate-pulse mb-8">ECO MODE</div>
         <div className="text-xl">画面をタッチして復帰</div>
         <div className="mt-8 text-sm text-green-900">{siteId} 監視中</div>
+        <div className="mt-2 text-xs text-green-800">通信状態: {connectionStatus}</div>
         <div className="absolute bottom-10 animate-bounce">
             {incomingAlert ? "⚠️ 緊急アラート着信" : "システム正常"}
         </div>
@@ -120,10 +113,13 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
             <h1 className="text-xl font-bold text-white tracking-wider">GENBA<span className="text-orange-500">LINK</span></h1>
             <span className="px-3 py-1 bg-blue-900 text-blue-200 text-xs rounded-full border border-blue-700">{siteId}</span>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-4">
+            <div className="hidden md:block text-xs text-slate-400">
+                P2P: <span className={connectionStatus.includes('完了') ? 'text-green-400' : 'text-yellow-400'}>{connectionStatus}</span>
+            </div>
             <button 
                 onClick={() => setEcoMode(true)}
-                className="bg-emerald-900/50 hover:bg-emerald-800 border border-emerald-700 text-emerald-400 px-6 py-2 rounded-lg font-bold flex items-center gap-2"
+                className="bg-emerald-900/50 hover:bg-emerald-800 border border-emerald-700 text-emerald-400 px-4 py-2 rounded-lg font-bold flex items-center gap-2 text-sm"
             >
                 <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
                 エコモード
@@ -170,7 +166,6 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                                  <div className="text-white font-medium mb-1">
                                     {isConnected ? (isSpeaking ? "AI発話中..." : "聞き取り中...") : "AI未接続"}
                                  </div>
-                                 {/* Volume Visualizer */}
                                  <div className="flex items-end gap-1 h-8">
                                     {[...Array(5)].map((_, i) => (
                                         <div 
@@ -194,7 +189,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
           )}
         </div>
 
-        {/* Sidebar Tabs (Thumb friendly) */}
+        {/* Sidebar Tabs */}
         <div className="w-24 bg-slate-900 border-l border-slate-700 flex flex-col">
             <button 
                 onClick={() => setActiveTab('camera')}
