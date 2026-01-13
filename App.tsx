@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { UserRole, ChatMessage } from './types';
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
 import FieldDashboard from './components/FieldDashboard';
-import { Peer } from 'peerjs';
+import { Peer, DataConnection, MediaConnection } from 'peerjs';
 
 const App: React.FC = () => {
   const [currentRole, setCurrentRole] = useState<UserRole>(UserRole.NONE);
@@ -12,145 +12,185 @@ const App: React.FC = () => {
   const [incomingAlert, setIncomingAlert] = useState(false);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [peerStatus, setPeerStatus] = useState<string>('切断');
+  const [peerStatus, setPeerStatus] = useState<string>('未接続');
 
   const peerRef = useRef<Peer | null>(null);
-  const connRef = useRef<any>(null);
+  const connRef = useRef<DataConnection | null>(null);
+  const retryIntervalRef = useRef<any>(null);
 
-  // PeerJS接続ロジック
+  // --- メッセージ受信処理 (共通) ---
+  const handleDataReceived = useCallback((data: any) => {
+    console.log("Data received:", data);
+    const { type, payload } = data;
+    
+    if (type === 'CHAT') {
+       setMessages(prev => {
+         const incomingMsg = { ...payload, timestamp: new Date(payload.timestamp) };
+         if (prev.some(m => m.id === incomingMsg.id)) return prev;
+         return [...prev, incomingMsg];
+       });
+    } else if (type === 'ALERT') {
+       setIncomingAlert(true);
+       setTimeout(() => setIncomingAlert(false), 5000);
+    } else if (type === 'REQUEST_STREAM') {
+       // 現場側: 映像要求を受け取ったら、管理者に電話をかける
+       // 注意: localStreamはRefではなくStateだが、Callback内で最新を参照するために依存配列に注意するか、
+       // ここではイベント発火させるだけにする。
+       // シンプルにするため、CustomEventを発火させてuseEffectで拾う
+       window.dispatchEvent(new CustomEvent('TRIGGER_CALL_ADMIN'));
+    }
+  }, []);
+
+  // --- Peer初期化とイベントリスナー ---
   useEffect(() => {
     if (!siteId || currentRole === UserRole.NONE) return;
 
-    // PeerIDの生成ルール: 
-    // 現場: {siteId}
-    // 管理者: {siteId}-admin
+    // ID生成: 現場=そのもの、管理者=admin付き
     const myPeerId = currentRole === UserRole.FIELD ? siteId : `${siteId}-admin`;
-    const targetPeerId = currentRole === UserRole.FIELD ? `${siteId}-admin` : siteId;
+    
+    console.log(`Initializing Peer with ID: ${myPeerId}`);
+    setPeerStatus('Peer初期化中...');
 
     const peer = new Peer(myPeerId, {
-      debug: 1,
+      debug: 2,
     });
     peerRef.current = peer;
 
     peer.on('open', (id) => {
-      console.log('My Peer ID is: ' + id);
-      setPeerStatus('待機中...');
-      
-      // 管理者の場合、現場へ接続を試みる
+      console.log('Peer Open. ID:', id);
+      setPeerStatus(`ID待機中: ${id}`);
+
+      // 管理者の場合、現場へ自動接続を開始
       if (currentRole === UserRole.ADMIN) {
-        connectToField(targetPeerId);
+        startConnectionRetry();
       }
     });
 
     peer.on('connection', (conn) => {
-      console.log('Incoming connection from:', conn.peer);
+      console.log('Incoming Data Connection:', conn.peer);
       connRef.current = conn;
-      setPeerStatus('データ接続完了');
-      setupDataConnection(conn);
+      setPeerStatus('チャット接続完了');
+      
+      conn.on('data', handleDataReceived);
+      conn.on('close', () => {
+         setPeerStatus('チャット切断');
+         connRef.current = null;
+      });
+      conn.on('error', (err) => console.error("Conn Error", err));
     });
 
     peer.on('call', (call) => {
-      console.log('Incoming call from:', call.peer);
-      // 現場側: 着信があったら自分の映像（あれば）を返して応答
-      call.answer(localStream || undefined);
+      console.log('Incoming Call (Video) from:', call.peer);
+      // 管理者: 映像を受け取る
+      // 現場: 通常かかってこないが、双方向ならここで応答
       
-      call.on('stream', (stream: MediaStream) => {
-        // 双方向通話の場合は相手の映像も受け取るが、今回は現場→管理が主
+      call.answer(); // 映像を送らずに応答（受信専用）
+      
+      call.on('stream', (stream) => {
+        console.log("Stream Received");
+        setRemoteStream(stream);
       });
+      call.on('error', (e) => console.error("Call Error", e));
     });
 
     peer.on('error', (err) => {
       console.error('Peer error:', err);
-      setPeerStatus(`エラー: ${err.type}`);
+      // ID重複などの致命的エラーの場合
+      if (err.type === 'unavailable-id') {
+         setPeerStatus('ID重複エラー: 別タブを閉じてください');
+      } else {
+         setPeerStatus(`エラー: ${err.type}`);
+      }
+    });
+
+    peer.on('disconnected', () => {
+       setPeerStatus('Peerサーバー切断: 再接続中...');
+       peer.reconnect();
     });
 
     return () => {
+      stopConnectionRetry();
       peer.destroy();
+      peerRef.current = null;
     };
-  }, [siteId, currentRole]);
+  }, [siteId, currentRole, handleDataReceived]);
 
-  // ローカルストリーム（現場カメラ）が準備できたら、既存のコールがあれば更新、または待機
-  useEffect(() => {
-    if (currentRole === UserRole.FIELD && localStream && peerRef.current) {
-        // ここでは能動的にコールせず、管理者からのコールを待つ設計にする
-        // もし必要ならここで peer.call(adminId, localStream) も可能
-    }
-  }, [localStream, currentRole]);
 
-  const connectToField = (targetId: string) => {
-    if (!peerRef.current) return;
-    
-    setPeerStatus('接続試行中...');
+  // --- 管理者用: 接続リトライロジック ---
+  const connectToField = () => {
+    if (!peerRef.current || currentRole !== UserRole.ADMIN) return;
+    const targetId = siteId; // 現場のID
 
-    // 1. データ接続（チャット用）
-    const conn = peerRef.current.connect(targetId);
+    console.log(`Connecting to Field (${targetId})...`);
+    const conn = peerRef.current.connect(targetId, {
+        reliable: true
+    });
+
     conn.on('open', () => {
-        console.log("Connected to Field via Data");
+        console.log("Connected to Field!");
         connRef.current = conn;
-        setPeerStatus('接続完了');
-        setupDataConnection(conn);
-    });
-
-    // 2. メディア接続（映像受信リクエスト）
-    // ダミーのストリームを送って相手のストリームを引き出すか、単にReceive onlyにする
-    // PeerJSの仕様上、callするにはMediaStreamが必要な場合が多いが、受信専用なら相手にかけてもらうか、
-    // あるいは空のストリームでかける等の工夫が必要。
-    // 今回は「管理者が電話をかける」→「現場が応答する」フローにする。
-    // 管理者側は映像を送らないので、createMediaStreamSource等でダミーを作るか、nullでcallして相手に制約させるか。
-    // PeerJSはstreamなしのcallをサポートしていない場合があるため、
-    // 簡略化のため「現場の映像準備ができたら、管理者がCallボタンを押す」UIにするか、
-    // あるいは現場側からAdminへCallさせる方が安定する。
-    
-    // 方針変更: 現場端末は「admin」を見つけたら（あるいは接続が来たら）、自分のストリームでCallバックする
-  };
-
-  const setupDataConnection = (conn: any) => {
-    conn.on('data', (data: any) => {
-      const { type, payload } = data;
-      
-      if (type === 'CHAT') {
-         setMessages(prev => {
-           const incomingMsg = { ...payload, timestamp: new Date(payload.timestamp) };
-           if (prev.some(m => m.id === incomingMsg.id)) return prev;
-           return [...prev, incomingMsg];
-         });
-      } else if (type === 'ALERT') {
-         setIncomingAlert(true);
-         setTimeout(() => setIncomingAlert(false), 5000);
-      } else if (type === 'REQUEST_STREAM') {
-         // 管理者から映像要求が来た場合、現場は電話をかける
-         if (currentRole === UserRole.FIELD && localStream && peerRef.current) {
-             const call = peerRef.current.call(`${siteId}-admin`, localStream);
-             console.log("Calling Admin with stream...");
-         }
-      }
-    });
-  };
-
-  // 管理者から映像取得をリクエストする関数
-  const requestStream = () => {
-      if (connRef.current && connRef.current.open) {
-          connRef.current.send({ type: 'REQUEST_STREAM' });
-      }
-  };
-
-  // 管理者側でCallを受け取る処理の追加（useEffect内だとclosure問題があるのでrefを使うか、再定義が必要）
-  // 簡略化のため、Peer定義のEffect内で `peer.on('call')` を定義済み。
-  // Admin側の `peer.on('call')` をここで補強する。
-  useEffect(() => {
-    if (currentRole === UserRole.ADMIN && peerRef.current) {
-        peerRef.current.off('call'); // 重複防止
-        peerRef.current.on('call', (call) => {
-            console.log("Receiving video stream call...");
-            call.answer(); // 映像なしで応答（受信専用）
-            call.on('stream', (remoteStream) => {
-                console.log("Stream received!");
-                setRemoteStream(remoteStream);
-            });
+        setPeerStatus('現場接続完了');
+        stopConnectionRetry(); // 成功したらリトライ停止
+        
+        // メッセージ受信設定
+        conn.on('data', handleDataReceived);
+        conn.on('close', () => {
+            console.log("Connection closed");
+            setPeerStatus('現場切断');
+            connRef.current = null;
+            // 切断されたら再試行再開？ 必要に応じて
         });
-    }
-  }, [currentRole, peerRef.current]);
+    });
 
+    conn.on('error', (err) => {
+        console.log("Connection attempt failed:", err);
+        // リトライはintervalに任せる
+    });
+  };
+
+  const startConnectionRetry = () => {
+      if (retryIntervalRef.current) clearInterval(retryIntervalRef.current);
+      // 即時実行
+      connectToField();
+      // 5秒ごとにリトライ
+      retryIntervalRef.current = setInterval(() => {
+          if (!connRef.current || !connRef.current.open) {
+              connectToField();
+          }
+      }, 5000);
+  };
+
+  const stopConnectionRetry = () => {
+      if (retryIntervalRef.current) {
+          clearInterval(retryIntervalRef.current);
+          retryIntervalRef.current = null;
+      }
+  };
+
+
+  // --- 現場用: "REQUEST_STREAM" イベントハンドリング ---
+  useEffect(() => {
+    if (currentRole !== UserRole.FIELD) return;
+
+    const handleTriggerCall = () => {
+        if (!peerRef.current || !localStream) {
+            console.warn("Cannot call admin: Peer or Stream not ready");
+            return;
+        }
+        const adminId = `${siteId}-admin`;
+        console.log(`Calling Admin (${adminId}) with stream...`);
+        const call = peerRef.current.call(adminId, localStream);
+        
+        call.on('close', () => console.log("Call closed"));
+        call.on('error', (e) => console.error("Call error", e));
+    };
+
+    window.addEventListener('TRIGGER_CALL_ADMIN', handleTriggerCall);
+    return () => window.removeEventListener('TRIGGER_CALL_ADMIN', handleTriggerCall);
+  }, [currentRole, siteId, localStream]);
+
+
+  // --- UI Actions ---
 
   const handleLogin = (role: UserRole, id: string) => {
     setSiteId(id);
@@ -158,7 +198,7 @@ const App: React.FC = () => {
     setMessages([{
       id: 'welcome',
       sender: 'AI',
-      text: `接続ID: ${id}。${role === UserRole.FIELD ? 'カメラ起動中...' : '現場へ接続中...'}`,
+      text: `システム起動: ID [${id}]`,
       timestamp: new Date(),
       isRead: true
     }]);
@@ -167,6 +207,8 @@ const App: React.FC = () => {
   const sendMessageToPeer = (message: ChatMessage) => {
     if (connRef.current && connRef.current.open) {
         connRef.current.send({ type: 'CHAT', payload: message });
+    } else {
+        console.warn("Connection not open, message not sent");
     }
   };
 
@@ -180,11 +222,6 @@ const App: React.FC = () => {
     };
     setMessages(prev => [...prev, newMessage]);
     sendMessageToPeer(newMessage);
-    
-    // 既読シミュレーション
-    setTimeout(() => {
-      setMessages(prev => prev.map(m => m.id === newMessage.id ? { ...m, isRead: true } : m));
-    }, 2000);
   };
 
   const handleTranscription = (text: string, type: 'user' | 'model') => {
@@ -204,6 +241,15 @@ const App: React.FC = () => {
     if (connRef.current && connRef.current.open) {
         connRef.current.send({ type: 'ALERT' });
     }
+  };
+
+  const requestStream = () => {
+      if (connRef.current && connRef.current.open) {
+          console.log("Requesting stream from Field...");
+          connRef.current.send({ type: 'REQUEST_STREAM' });
+      } else {
+          alert("現場端末とデータ接続されていません。接続完了までお待ちください。");
+      }
   };
 
   if (currentRole === UserRole.NONE) {

@@ -26,6 +26,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   useEffect(() => {
     if (remoteVideoRef.current && remoteStream) {
         remoteVideoRef.current.srcObject = remoteStream;
+        // ブラウザの自動再生ポリシー対策: 
+        // ユーザーインタラクションなしで再生する場合、mutedが必要なことが多い
+        // ここでは一旦mutedで再生開始し、必要ならコントロールで解除する
+        remoteVideoRef.current.muted = true; 
+        remoteVideoRef.current.play().catch(e => console.error("Play error:", e));
     }
   }, [remoteStream]);
 
@@ -44,8 +49,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </nav>
         </div>
         <div className="flex items-center gap-3">
-             <div className="text-xs text-slate-400 mr-2">
-                状態: <span className={connectionStatus.includes('完了') ? 'text-green-400' : 'text-yellow-400'}>{connectionStatus}</span>
+             <div className="text-xs text-slate-400 mr-2 flex flex-col items-end">
+                <span>Status</span>
+                <span className={`font-bold ${connectionStatus.includes('完了') ? 'text-green-400' : 'text-yellow-400'}`}>{connectionStatus}</span>
              </div>
              <button 
                 onClick={onTriggerAlert}
@@ -68,14 +74,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <div className={`w-2 h-2 rounded-full ${remoteStream ? 'bg-red-500 animate-pulse' : 'bg-slate-500'}`}></div>
                             <span className="text-sm font-mono text-slate-300">{siteId} - リアルタイム映像</span>
                         </div>
-                        {!remoteStream && (
-                            <button 
-                                onClick={onRequestStream}
-                                className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded"
-                            >
-                                映像接続
-                            </button>
-                        )}
+                        <div className="flex gap-2">
+                           {!remoteStream && (
+                                <button 
+                                    onClick={onRequestStream}
+                                    className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded font-bold transition-colors"
+                                >
+                                    映像を要求
+                                </button>
+                           )}
+                           {remoteStream && (
+                               <button 
+                                    onClick={() => {
+                                        if (remoteVideoRef.current) {
+                                            remoteVideoRef.current.muted = !remoteVideoRef.current.muted;
+                                        }
+                                    }}
+                                    className="text-xs bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded font-bold transition-colors"
+                               >
+                                   音声切替
+                               </button>
+                           )}
+                        </div>
                     </div>
                     <div className="flex-1 bg-black relative flex items-center justify-center group">
                         {remoteStream ? (
@@ -83,23 +103,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 ref={remoteVideoRef} 
                                 autoPlay 
                                 playsInline 
+                                muted // Default muted to ensure autoplay
                                 className="w-full h-full object-contain bg-black"
                             />
                         ) : (
-                            <div className="text-center">
-                                <p className="text-slate-500 mb-2">映像信号なし</p>
-                                <p className="text-xs text-slate-600">現場端末のカメラが起動するのを待機しています...</p>
-                                <button 
-                                    onClick={onRequestStream}
-                                    className="mt-4 px-4 py-2 border border-slate-700 rounded text-slate-400 hover:text-white hover:border-slate-500 transition-colors"
-                                >
-                                    再接続を試みる
-                                </button>
+                            <div className="text-center p-8">
+                                <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                                <p className="text-slate-500 mb-2">映像信号を待機中...</p>
+                                <p className="text-xs text-slate-600 max-w-xs mx-auto mb-4">
+                                    現場端末が接続され、カメラ許可が有効になっていることを確認してください。
+                                    「映像を要求」ボタンを押すと接続を試みます。
+                                </p>
                             </div>
                         )}
                         
                         {remoteStream && (
-                            <div className="absolute top-4 right-4 bg-black/50 px-2 py-1 rounded text-xs text-white">
+                            <div className="absolute top-4 right-4 bg-red-600/80 px-2 py-1 rounded text-xs text-white font-bold animate-pulse">
                                 LIVE
                             </div>
                         )}
