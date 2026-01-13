@@ -4,10 +4,11 @@ import { ChatMessage, Attachment } from '../types';
 interface ChatInterfaceProps {
   messages: ChatMessage[];
   onSendMessage: (text: string, attachment?: Attachment) => void;
-  role: 'Admin' | 'Field';
+  userName: string;
+  onMarkRead?: (id: string) => void; // Optional handler for marking read
 }
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, role }) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, userName, onMarkRead }) => {
   const [input, setInput] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -76,19 +77,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
       
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg) => {
-          const isMe = msg.sender === role;
+          const isMe = msg.sender === userName;
           const isAI = msg.sender === 'AI';
+          const isUnread = !isMe && !msg.isRead;
           
           return (
             <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
               <div 
-                className={`max-w-[85%] rounded-lg p-3 text-sm ${
+                onClick={() => isUnread && onMarkRead && onMarkRead(msg.id)}
+                className={`max-w-[85%] rounded-lg p-3 text-sm transition-all cursor-pointer ${
                   isMe 
                     ? 'bg-blue-600 text-white' 
                     : isAI 
                       ? 'bg-emerald-700 text-emerald-50 border border-emerald-600'
                       : 'bg-slate-700 text-slate-200'
-                }`}
+                } ${isUnread ? 'ring-2 ring-yellow-400 animate-pulse' : ''}`}
               >
                 <div className="flex justify-between items-baseline mb-1 opacity-80 text-xs">
                     <span className="font-bold mr-2">{msg.sender}</span>
@@ -96,7 +99,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
                 </div>
                 
                 {/* Text Content */}
-                <div className="whitespace-pre-wrap">{msg.text}</div>
+                <div className={`whitespace-pre-wrap ${isUnread ? 'font-bold text-yellow-100' : ''}`}>
+                    {isUnread && <span className="inline-block w-2 h-2 bg-yellow-400 rounded-full mr-2"></span>}
+                    {msg.text}
+                </div>
 
                 {/* Attachment Content */}
                 {msg.attachment && (
@@ -107,7 +113,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
                                     src={msg.attachment.url} 
                                     alt="attachment" 
                                     className="max-w-full rounded border border-white/10 cursor-pointer hover:opacity-90 transition-opacity"
-                                    onClick={() => window.open(msg.attachment?.url, '_blank')}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(msg.attachment?.url, '_blank');
+                                        if(isUnread && onMarkRead) onMarkRead(msg.id);
+                                    }}
                                 />
                                 <div className="text-[10px] opacity-70 truncate">{msg.attachment.name}</div>
                             </div>
@@ -115,6 +125,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
                             <a 
                                 href={msg.attachment.url} 
                                 download={msg.attachment.name}
+                                onClick={(e) => {
+                                    if(isUnread && onMarkRead) onMarkRead(msg.id);
+                                }}
                                 className="flex items-center gap-3 p-2 hover:bg-white/10 rounded transition-colors group"
                             >
                                 <div className="w-8 h-8 bg-red-500 rounded flex items-center justify-center text-[10px] font-bold text-white shrink-0">PDF</div>
@@ -129,6 +142,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
 
                 {isMe && msg.isRead && (
                   <div className="text-[10px] text-right mt-1 opacity-70">既読</div>
+                )}
+                {isUnread && (
+                  <div className="text-[10px] text-right mt-1 text-yellow-300 font-bold">タップして既読</div>
                 )}
               </div>
             </div>

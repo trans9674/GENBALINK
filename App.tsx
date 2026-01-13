@@ -8,6 +8,7 @@ import { Peer, DataConnection, MediaConnection } from 'peerjs';
 const App: React.FC = () => {
   const [currentRole, setCurrentRole] = useState<UserRole>(UserRole.NONE);
   const [siteId, setSiteId] = useState<string>("");
+  const [userName, setUserName] = useState<string>(""); 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [incomingAlert, setIncomingAlert] = useState(false);
   
@@ -242,9 +243,14 @@ const App: React.FC = () => {
 
 
   // --- UI Actions ---
-  const handleLogin = (role: UserRole, id: string) => {
+  const handleLogin = (role: UserRole, id: string, name: string) => {
     setSiteId(id);
     setCurrentRole(role);
+    
+    // Name Logic: Field is always "現地", Admin uses input or defaults to "Admin"
+    const effectiveName = role === UserRole.FIELD ? "現地" : (name || "Admin");
+    setUserName(effectiveName);
+
     setMessages([{
       id: 'welcome',
       sender: 'AI',
@@ -263,7 +269,7 @@ const App: React.FC = () => {
   const handleSendMessage = (text: string, attachment?: Attachment) => {
     const newMessage: ChatMessage = {
       id: Date.now().toString() + Math.random().toString().slice(2, 5),
-      sender: currentRole === UserRole.ADMIN ? 'Admin' : 'Field',
+      sender: userName, // Use the stored user name
       text,
       timestamp: new Date(),
       isRead: false,
@@ -271,6 +277,15 @@ const App: React.FC = () => {
     };
     setMessages(prev => [...prev, newMessage]);
     sendMessageToPeer(newMessage);
+  };
+
+  const handleMarkRead = (messageId: string) => {
+    setMessages(prev => prev.map(msg => {
+        if (msg.id === messageId) {
+            return { ...msg, isRead: true };
+        }
+        return msg;
+    }));
   };
 
   const handleAdminAlert = () => {
@@ -313,6 +328,7 @@ const App: React.FC = () => {
         onStartCall={startCall}
         onAcceptCall={acceptCall}
         onEndCall={endCall}
+        userName={userName}
       />
     );
   }
@@ -322,7 +338,6 @@ const App: React.FC = () => {
       siteId={siteId}
       messages={messages} 
       onSendMessage={handleSendMessage} 
-      // onTranscription removed as AI is disabled
       onTranscription={() => {}}
       incomingAlert={incomingAlert}
       onClearAlert={() => setIncomingAlert(false)}
@@ -334,6 +349,8 @@ const App: React.FC = () => {
       onStartCall={startCall}
       onAcceptCall={acceptCall}
       onEndCall={endCall}
+      userName={userName}
+      onMarkRead={handleMarkRead}
     />
   );
 };

@@ -16,6 +16,7 @@ interface AdminDashboardProps {
   onStartCall: () => void;
   onAcceptCall: () => void;
   onEndCall: () => void;
+  userName: string;
 }
 
 // Annotation types
@@ -47,7 +48,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     callStatus,
     onStartCall,
     onAcceptCall,
-    onEndCall
+    onEndCall,
+    userName
 }) => {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -309,48 +311,50 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   return (
     <div className="h-screen flex flex-col bg-slate-950">
-      {/* Header */}
-      <div className="h-14 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-6 shadow-md z-10">
-        <div className="flex items-center gap-6">
-            <h1 className="text-lg font-bold text-white tracking-widest">GENBA<span className="text-orange-500">LINK</span> <span className="text-slate-500 text-sm ml-2 font-normal">管理者コンソール</span></h1>
-            <nav className="hidden md:flex space-x-4">
-                <button className="text-slate-300 hover:text-white text-sm font-medium">ダッシュボード</button>
-                <div className="flex items-center gap-2">
-                     <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-                     <span className="text-blue-400 text-sm font-medium">現場ID: {siteId}</span>
+      {/* Header - Dimensions and fonts increased by one step from previous */}
+      <div className="h-24 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-10 shadow-md z-10">
+        <div className="flex items-center gap-8">
+            {/* Logo */}
+            <h1 className="text-3xl font-bold text-white tracking-widest">GENBA<span className="text-orange-500">LINK</span> <span className="text-slate-500 text-xl ml-3 font-normal">管理者コンソール ({userName})</span></h1>
+            <nav className="hidden md:flex space-x-8">
+                <button className="text-slate-300 hover:text-white text-lg font-medium">ダッシュボード</button>
+                <div className="flex items-center gap-3">
+                     <span className="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></span>
+                     <span className="text-blue-400 text-lg font-medium">現場ID: {siteId}</span>
                 </div>
             </nav>
         </div>
-        <div className="flex items-center gap-3">
-             <div className="text-xs text-slate-400 mr-2 flex flex-col items-end">
+        <div className="flex items-center gap-6">
+             <div className="text-base text-slate-400 mr-2 flex flex-col items-end">
                 <span>Status</span>
                 <span className={`font-bold ${connectionStatus.includes('完了') ? 'text-green-400' : 'text-yellow-400'}`}>{connectionStatus}</span>
              </div>
              
-             {/* Call Button */}
+             {/* Call Button - Increased size, font, icon */}
              {callStatus === 'incoming' ? (
-                 <button onClick={onAcceptCall} className="bg-green-600 hover:bg-green-500 text-white px-4 py-1.5 rounded text-sm font-bold shadow animate-bounce">
+                 <button onClick={onAcceptCall} className="bg-green-600 hover:bg-green-500 text-white px-8 py-3.5 rounded-xl text-lg font-bold shadow animate-bounce">
                      着信に応答
                  </button>
              ) : callStatus === 'connected' ? (
-                 <button onClick={onEndCall} className="bg-red-600 hover:bg-red-500 text-white px-4 py-1.5 rounded text-sm font-bold shadow animate-pulse">
+                 <button onClick={onEndCall} className="bg-red-600 hover:bg-red-500 text-white px-8 py-3.5 rounded-xl text-lg font-bold shadow animate-pulse">
                      通話終了
                  </button>
              ) : (
                  <button 
                      onClick={onStartCall} 
                      disabled={callStatus === 'outgoing'}
-                     className={`px-4 py-1.5 rounded text-sm font-bold shadow-lg transition-all border flex items-center gap-2 ${callStatus === 'outgoing' ? 'bg-slate-600' : 'bg-blue-600 hover:bg-blue-500 text-white'}`}
+                     className={`px-8 py-3.5 rounded-xl text-lg font-bold shadow-lg transition-all border flex items-center gap-3 ${callStatus === 'outgoing' ? 'bg-slate-600' : 'bg-blue-600 hover:bg-blue-500 text-white'}`}
                  >
-                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
                      {callStatus === 'outgoing' ? '呼出中...' : '通話'}
                  </button>
              )}
 
+             {/* Camera Toggle */}
              <button 
                 onClick={toggleCamera}
                 disabled={isScreenSharing}
-                className={`px-4 py-1.5 rounded text-sm font-bold shadow-lg transition-all border ${
+                className={`px-8 py-3.5 rounded-xl text-lg font-bold shadow-lg transition-all border ${
                     localStream && !isScreenSharing
                     ? 'bg-red-600 border-red-500 text-white hover:bg-red-700 animate-pulse' 
                     : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600 disabled:opacity-30'
@@ -359,23 +363,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 {localStream && !isScreenSharing ? '配信停止' : 'カメラ配信'}
              </button>
 
+             {/* Screen Share Toggle */}
              <button 
                 onClick={isScreenSharing ? stopScreenShare : startScreenShare}
-                className={`px-4 py-1.5 rounded text-sm font-bold shadow-lg transition-all border flex items-center gap-2 ${
+                className={`px-8 py-3.5 rounded-xl text-lg font-bold shadow-lg transition-all border flex items-center gap-3 ${
                     isScreenSharing
                     ? 'bg-orange-600 border-orange-500 text-white hover:bg-orange-700' 
                     : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
                 }`}
              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                 {isScreenSharing ? '共有停止' : '画面共有'}
              </button>
 
+             {/* Alert Button */}
              <button 
                 onClick={onTriggerAlert}
-                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded text-sm font-bold shadow-lg shadow-blue-900/20 active:scale-95 transition-all flex items-center gap-2"
+                className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-xl text-lg font-bold shadow-lg shadow-blue-900/20 active:scale-95 transition-all flex items-center gap-3"
              >
-                <span>🔔</span>
+                <span className="text-2xl">🔔</span>
                 呼出し
              </button>
         </div>
@@ -519,7 +525,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         {/* Right Chat Sidebar */}
         <div className="w-96 border-l border-slate-800">
-          <ChatInterface messages={messages} onSendMessage={onSendMessage} role="Admin" />
+          <ChatInterface messages={messages} onSendMessage={onSendMessage} userName={userName} />
         </div>
       </div>
     </div>

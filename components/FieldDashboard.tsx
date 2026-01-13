@@ -16,7 +16,9 @@ interface FieldDashboardProps {
   onStartCall: () => void;
   onAcceptCall: () => void;
   onEndCall: () => void;
-  onTranscription: (text: string, type: 'user' | 'model') => void; // Prop signature maintained for compatibility
+  onTranscription: (text: string, type: 'user' | 'model') => void; 
+  userName: string;
+  onMarkRead: (id: string) => void; // Added
 }
 
 const FieldDashboard: React.FC<FieldDashboardProps> = ({ 
@@ -31,10 +33,12 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   callStatus,
   onStartCall,
   onAcceptCall,
-  onEndCall
+  onEndCall,
+  userName,
+  onMarkRead
 }) => {
   const [ecoMode, setEcoMode] = useState(false);
-  const [activeTab, setActiveTab] = useState<'camera' | 'chat'>('camera');
+  // Removed activeTab state as layout is now split screen
   const videoRef = useRef<HTMLVideoElement>(null);
   const adminVideoRef = useRef<HTMLVideoElement>(null); 
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
@@ -107,8 +111,9 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   useEffect(() => {
     const startCamera = async () => {
       try {
+        // Changed to 'user' (front facing) as requested ("opposite side")
         const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'environment' }, 
+            video: { facingMode: 'user' }, 
             audio: true 
         });
         
@@ -140,7 +145,6 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
     if (incomingAlert || callStatus === 'incoming') {
       if (ecoMode) setEcoMode(false);
 
-      // 2. Play Chime Sound
       try {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioContext) {
@@ -159,7 +163,6 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
               osc.stop(time + duration);
           };
           const now = ctx.currentTime;
-          // Different ringtone for call vs alert?
           playTone(660, now, 0.6);
           playTone(523, now + 0.5, 0.6);
           playTone(784, now + 1.0, 0.6);
@@ -427,10 +430,29 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Main Content Area */}
-        <div className="flex-1 relative bg-black">
-          {activeTab === 'camera' && (
-            <div className="relative h-full w-full">
+        {/* Main Layout: Sidebar - Video - Chat */}
+        
+        {/* Sidebar Tabs (Reduced to just Attendance as Chat/Live are always visible) */}
+        <div className="w-20 bg-slate-900 border-r border-slate-800 flex flex-col pt-4 items-center gap-4">
+             <button 
+                onClick={() => {
+                    setShowAttendanceModal(true);
+                    setAttendanceStep('menu');
+                    resetInactivityTimer();
+                }}
+                className={`w-16 h-16 rounded-xl flex flex-col items-center justify-center gap-1 ${showAttendanceModal ? 'bg-slate-800 text-blue-400' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+            >
+                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                </svg>
+                <span className="text-[10px] font-bold">入退場</span>
+            </button>
+        </div>
+
+        {/* Main Content Area (Split Screen) */}
+        <div className="flex-1 flex relative bg-black">
+             {/* Video Area */}
+             <div className="flex-1 relative bg-black">
                 {/* Local Camera (Field View) */}
                 <video 
                     ref={videoRef} 
@@ -476,63 +498,23 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                     </div>
                 )}
                 
-                {/* Call Widget (Replaces AI Visualizer) */}
+                {/* Call Widget */}
                 <div className="absolute bottom-8 left-8 right-8 flex justify-between items-end">
                     <div className="bg-black/60 backdrop-blur-md p-4 rounded-xl border border-white/10 max-w-md">
                          {renderCallWidget()}
                     </div>
                 </div>
-            </div>
-          )}
-          {activeTab === 'chat' && (
-             <ChatInterface 
-                messages={messages} 
-                onSendMessage={onSendMessage} 
-                role="Field" 
-             />
-          )}
-        </div>
+             </div>
 
-        {/* Sidebar Tabs */}
-        <div className="w-24 bg-slate-900 border-l border-slate-700 flex flex-col">
-            <button 
-                onClick={() => { setActiveTab('camera'); resetInactivityTimer(); }}
-                className={`flex-1 flex flex-col items-center justify-center gap-2 border-b border-slate-700 ${activeTab === 'camera' ? 'bg-slate-800 text-blue-400' : 'text-slate-400'}`}
-            >
-                 <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-                <span className="text-xs font-bold">ライブ</span>
-            </button>
-            <button 
-                onClick={() => { setActiveTab('chat'); resetInactivityTimer(); }}
-                className={`flex-1 flex flex-col items-center justify-center gap-2 border-b border-slate-700 ${activeTab === 'chat' ? 'bg-slate-800 text-blue-400' : 'text-slate-400'}`}
-            >
-                <div className="relative">
-                    <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                    </svg>
-                    {messages.some(m => !m.isRead && m.sender !== 'Field') && (
-                        <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
-                    )}
-                </div>
-                <span className="text-xs font-bold">チャット</span>
-            </button>
-            
-            {/* Attendance Button */}
-            <button 
-                onClick={() => {
-                    setShowAttendanceModal(true);
-                    setAttendanceStep('menu');
-                    resetInactivityTimer();
-                }}
-                className={`flex-1 flex flex-col items-center justify-center gap-2 ${showAttendanceModal ? 'bg-slate-800 text-blue-400' : 'text-slate-400'}`}
-            >
-                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                </svg>
-                <span className="text-xs font-bold">入退場</span>
-            </button>
+             {/* Right Chat Sidebar (Always Visible) */}
+             <div className="w-96 border-l border-slate-800 bg-slate-900 flex flex-col">
+                 <ChatInterface 
+                    messages={messages} 
+                    onSendMessage={onSendMessage} 
+                    userName={userName}
+                    onMarkRead={onMarkRead}
+                 />
+             </div>
         </div>
       </div>
     </div>

@@ -12,7 +12,7 @@ export interface Attachment {
 
 export interface ChatMessage {
   id: string;
-  sender: 'User' | 'AI' | 'Admin' | 'Field';
+  sender: string;
   text: string;
   timestamp: Date;
   isRead?: boolean;

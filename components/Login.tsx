@@ -2,22 +2,31 @@ import React, { useState } from 'react';
 import { UserRole } from '../types';
 
 interface LoginProps {
-  onLogin: (role: UserRole, siteId: string) => void;
+  onLogin: (role: UserRole, siteId: string, name: string) => void;
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [siteId, setSiteId] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
   const [error, setError] = useState('');
 
   const handleLogin = (role: UserRole) => {
     const cleanId = siteId.trim();
+    const cleanName = name.trim();
+    
     if (!cleanId || !password.trim()) {
       setError('現場IDとパスワードを入力してください');
       return;
     }
-    // IDの空白除去
-    onLogin(role, cleanId);
+    
+    // For Admin, name is required or recommended? 
+    // Requirement says "Admin -> Display login name". 
+    // Let's allow empty and default to 'Admin' in App if not provided, 
+    // but better to encourage input.
+    // However, for Field, the name is forced to '現地' later, so input is optional/ignored.
+    
+    onLogin(role, cleanId, cleanName);
   };
 
   return (
@@ -54,6 +63,17 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setError(''); }}
                 placeholder="••••••••"
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">お名前 (Display Name)</label>
+              <input 
+                type="text" 
+                value={name}
+                onChange={(e) => { setName(e.target.value); setError(''); }}
+                placeholder="例: 松岡 (現場側は自動で「現地」になります)"
                 className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
               />
             </div>
