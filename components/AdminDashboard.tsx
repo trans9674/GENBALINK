@@ -101,16 +101,17 @@ const SurveillanceCamera: React.FC<{
                     }}
                 />
             ) : (
-                <div className="text-center px-4">
+                <div className="text-center px-4 w-full">
                     {relayError ? (
-                        <div className="text-red-400">
+                        <div className="text-red-400 bg-red-900/20 p-2 rounded border border-red-900/50">
                              <div className="text-2xl mb-2">⚠️</div>
-                             <div className="text-xs font-bold">{relayError}</div>
+                             <div className="text-xs font-bold break-all">{relayError}</div>
                              <div className="text-[9px] mt-1 text-slate-400 leading-tight text-left">
                                 考えられる原因:<br/>
-                                ・URLがストリーム形式(.mjpg)になっている<br/>
+                                ・URLが間違っている(Reolinkは認証必須)<br/>
+                                ・URLがストリーム形式(.mjpg)<br/>
                                 ・カメラがCORSヘッダー非対応<br/>
-                                ・HTTPS環境でHTTPカメラに接続している
+                                ・Mixed Content (HTTPS→HTTP)
                              </div>
                         </div>
                     ) : (
@@ -502,6 +503,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
      }
   };
 
+  // Reolink Template Helper
+  const applyReolinkTemplate = () => {
+      setNewCamera(prev => ({
+          ...prev,
+          url: 'http://192.168.1.XXX/cgi-bin/api.cgi?cmd=Snap&channel=0&user=admin&password=password',
+          isRelay: true // Enforce relay since browser can't do P2P UID
+      }));
+  };
+
   return (
     <div className="h-screen flex flex-col bg-slate-950">
       {/* Header */}
@@ -565,7 +575,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
                 }`}
              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                 {isScreenSharing ? '共有停止' : '画面共有'}
              </button>
 
@@ -623,7 +633,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                  <div className="flex-1 bg-slate-900 rounded-lg border border-slate-800 overflow-hidden relative flex flex-col">
                     <div className="p-2 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
                         <span className="text-sm font-bold text-orange-400 flex items-center gap-2">
-                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                              画面共有 & 指示モード
                         </span>
                     </div>
@@ -780,10 +790,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 </div>
                             </label>
                         </div>
+                        
+                        {/* URL INPUT SECTION */}
                         <div>
-                            <label className="block text-xs font-bold text-slate-400 mb-1">
-                                {newCamera.isRelay ? 'Snapshot URL (JPEGのみ)' : 'URL (ローカルIP可)'}
-                            </label>
+                            <div className="flex justify-between items-end mb-1">
+                                <label className="block text-xs font-bold text-slate-400">
+                                    {newCamera.isRelay ? 'Snapshot URL (JPEGのみ)' : 'URL (ローカルIP可)'}
+                                </label>
+                                <button 
+                                    onClick={applyReolinkTemplate}
+                                    className="text-[10px] bg-blue-900/50 hover:bg-blue-800 text-blue-300 px-2 py-0.5 rounded border border-blue-800 transition-colors"
+                                >
+                                    Reolink テンプレート
+                                </button>
+                            </div>
                             <input 
                                 type="text" 
                                 value={newCamera.url || ''} 
@@ -792,11 +812,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none font-mono text-xs" 
                             />
                             {newCamera.isRelay && (
-                                <div className="text-[10px] text-yellow-500 mt-1">
-                                    ※ Relayモードでは動画ストリームURL(.mjpg)は使用できません。必ず静止画(Snapshot)のURLを入力してください。
+                                <div className="mt-1 space-y-1">
+                                    <div className="text-[10px] text-yellow-500">
+                                        ※ Relayモードでは動画ストリームURL(.mjpg)は使用できません。必ず静止画(Snapshot)のURLを入力してください。
+                                    </div>
+                                    <div className="text-[10px] text-blue-400">
+                                        ※ URL内の「user=admin」と「password=...」を実際のカメラ設定に合わせて変更してください。
+                                    </div>
                                 </div>
                             )}
                         </div>
+                        
                         {(newCamera.type === 'snapshot' || newCamera.isRelay) && (
                             <div>
                                 <label className="block text-xs font-bold text-slate-400 mb-1">更新間隔 (ms)</label>
