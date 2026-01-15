@@ -503,11 +503,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
      }
   };
 
-  // Reolink Template Helper
+  // Reolink Template Helper (Updated with User provided credentials)
   const applyReolinkTemplate = () => {
       setNewCamera(prev => ({
           ...prev,
-          url: 'http://192.168.1.XXX/cgi-bin/api.cgi?cmd=Snap&channel=0&user=admin&password=password',
+          url: 'http://192.168.11.21/cgi-bin/api.cgi?cmd=Snap&channel=0&user=admin&password=genbalink01',
           isRelay: true // Enforce relay since browser can't do P2P UID
       }));
   };
