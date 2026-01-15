@@ -35,6 +35,7 @@ const App: React.FC = () => {
 
   // Relay Images State (Admin Side) - Map camera ID to base64 image string
   const [relayImages, setRelayImages] = useState<Record<string, string>>({});
+  const [relayErrors, setRelayErrors] = useState<Record<string, string>>({});
 
   // Save messages to local storage whenever they change
   useEffect(() => {
@@ -97,10 +98,26 @@ const App: React.FC = () => {
         // [Field Side] Admin requested a camera image relay
         // Payload: { cameraId, url }
         try {
-            // Attempt to fetch the local camera image
-            // NOTE: This assumes the camera supports CORS or browser security is permissive
-            const response = await fetch(payload.url, { mode: 'cors' });
-            if (!response.ok) throw new Error('Network response was not ok');
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+
+            // Fetch with CORS mode. 
+            // Note: If IP camera does not support CORS, this will fail with TypeError.
+            // Note: If using MJPEG URL, this will hang until timeout.
+            const response = await fetch(payload.url, { 
+                mode: 'cors',
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
+            if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+            
+            // Check Content-Type to avoid reading infinite streams as blobs
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('multipart/x-mixed-replace')) {
+                throw new Error("Stream URL detected. Use Snapshot URL.");
+            }
+
             const blob = await response.blob();
             
             // Convert to Base64
@@ -118,15 +135,36 @@ const App: React.FC = () => {
                 }
             };
             reader.readAsDataURL(blob);
-        } catch (error) {
-            console.error("Relay Fetch Error (CORS?):", error);
-            // Optionally send back an error state
+        } catch (error: any) {
+            console.error("Relay Fetch Error:", error);
+            // Send back error to admin
+            if (connRef.current && connRef.current.open) {
+                connRef.current.send({
+                    type: 'RELAY_ERROR',
+                    payload: {
+                        cameraId: payload.cameraId,
+                        error: error.name === 'AbortError' ? 'Timeout (Stream URL?)' : error.message || 'Fetch Failed'
+                    }
+                });
+            }
         }
     } else if (type === 'RELAY_RESPONSE') {
         // [Admin Side] Received relayed image from Field
         setRelayImages(prev => ({
             ...prev,
             [payload.cameraId]: payload.image
+        }));
+        // Clear error if success
+        setRelayErrors(prev => {
+            const newState = { ...prev };
+            delete newState[payload.cameraId];
+            return newState;
+        });
+    } else if (type === 'RELAY_ERROR') {
+        // [Admin Side] Received error from Field
+        setRelayErrors(prev => ({
+            ...prev,
+            [payload.cameraId]: payload.error
         }));
     }
   }, [siteId]);
@@ -211,6 +249,7 @@ const App: React.FC = () => {
         setRemoteStream(null);
         setCallStatus('idle');
         setRelayImages({}); // Clear images on disconnect
+        setRelayErrors({});
     }
 
     const myPeerId = currentRole === UserRole.FIELD ? siteId : `${siteId}-admin`;
@@ -380,6 +419,7 @@ const App: React.FC = () => {
       });
       setSiteId(newSiteId);
       setRelayImages({}); // Clear relay images
+      setRelayErrors({});
   };
 
   const handleAddSite = (newSite: Site) => {
@@ -468,6 +508,7 @@ const App: React.FC = () => {
         userRole={currentRole}
         onMarkRead={handleMarkRead}
         relayImages={relayImages} // Pass relay images
+        relayErrors={relayErrors} // Pass relay errors
         onTriggerRelay={triggerRelayRequest} // Pass relay trigger
       />
     );

@@ -24,6 +24,7 @@ interface AdminDashboardProps {
   onMarkRead: (id: string) => void;
   relayImages?: Record<string, string>; // { cameraId: base64 }
   onTriggerRelay?: (config: CameraConfig) => void;
+  relayErrors?: Record<string, string>; // { cameraId: errorMessage }
 }
 
 // Annotation types
@@ -46,8 +47,9 @@ const SurveillanceCamera: React.FC<{
     config: CameraConfig; 
     onDelete: () => void; 
     relayImage?: string; 
+    relayError?: string;
     onTriggerRelay?: (c: CameraConfig) => void;
-}> = ({ config, onDelete, relayImage, onTriggerRelay }) => {
+}> = ({ config, onDelete, relayImage, relayError, onTriggerRelay }) => {
   const [timestamp, setTimestamp] = useState(Date.now());
 
   useEffect(() => {
@@ -99,9 +101,24 @@ const SurveillanceCamera: React.FC<{
                     }}
                 />
             ) : (
-                <div className="text-center">
-                    <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
-                    <span className="text-[10px] text-slate-500">Connecting via Relay...</span>
+                <div className="text-center px-4">
+                    {relayError ? (
+                        <div className="text-red-400">
+                             <div className="text-2xl mb-2">⚠️</div>
+                             <div className="text-xs font-bold">{relayError}</div>
+                             <div className="text-[9px] mt-1 text-slate-400 leading-tight text-left">
+                                考えられる原因:<br/>
+                                ・URLがストリーム形式(.mjpg)になっている<br/>
+                                ・カメラがCORSヘッダー非対応<br/>
+                                ・HTTPS環境でHTTPカメラに接続している
+                             </div>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                            <span className="text-[10px] text-slate-500">Connecting via Relay...</span>
+                        </>
+                    )}
                 </div>
             )}
         </div>
@@ -156,7 +173,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     userRole,
     onMarkRead,
     relayImages,
-    onTriggerRelay
+    onTriggerRelay,
+    relayErrors
 }) => {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -700,6 +718,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     config={cameras[index]} 
                                     onDelete={() => setCameras(prev => prev.filter((_, i) => i !== index))} 
                                     relayImage={relayImages ? relayImages[cameras[index].id] : undefined}
+                                    relayError={relayErrors ? relayErrors[cameras[index].id] : undefined}
                                     onTriggerRelay={onTriggerRelay}
                                 />
                             ) : (
@@ -762,10 +781,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             </label>
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-slate-400 mb-1">URL (ローカルIP可)</label>
-                            <input type="text" value={newCamera.url || ''} onChange={e => setNewCamera({...newCamera, url: e.target.value})} placeholder="http://192.168.1.100/video.mjpg" className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none font-mono text-xs" />
+                            <label className="block text-xs font-bold text-slate-400 mb-1">
+                                {newCamera.isRelay ? 'Snapshot URL (JPEGのみ)' : 'URL (ローカルIP可)'}
+                            </label>
+                            <input 
+                                type="text" 
+                                value={newCamera.url || ''} 
+                                onChange={e => setNewCamera({...newCamera, url: e.target.value})} 
+                                placeholder={newCamera.isRelay ? "http://192.168.1.100/api/snapshot.jpg" : "http://192.168.1.100/video.mjpg"} 
+                                className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none font-mono text-xs" 
+                            />
+                            {newCamera.isRelay && (
+                                <div className="text-[10px] text-yellow-500 mt-1">
+                                    ※ Relayモードでは動画ストリームURL(.mjpg)は使用できません。必ず静止画(Snapshot)のURLを入力してください。
+                                </div>
+                            )}
                         </div>
-                        {newCamera.type === 'snapshot' && (
+                        {(newCamera.type === 'snapshot' || newCamera.isRelay) && (
                             <div>
                                 <label className="block text-xs font-bold text-slate-400 mb-1">更新間隔 (ms)</label>
                                 <input type="number" value={newCamera.refreshInterval || 1000} onChange={e => setNewCamera({...newCamera, refreshInterval: Number(e.target.value)})} className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none" />
