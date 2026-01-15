@@ -26,3 +26,17 @@ export interface LiveState {
 }
 
 export type CallStatus = 'idle' | 'outgoing' | 'incoming' | 'connected';
+
+export interface CameraConfig {
+  id: string;
+  name: string;
+  type: 'mjpeg' | 'snapshot' | 'iframe';
+  url: string;
+  refreshInterval?: number; // For snapshot mode (ms)
+  isRelay?: boolean; // New: If true, fetch via Field device
+}
+
+export interface Site {
+  id: string;   // GENBA-001
+  name: string; // 山田邸
+}

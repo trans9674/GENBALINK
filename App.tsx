@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { UserRole, ChatMessage, Attachment, CallStatus } from './types';
+import { UserRole, ChatMessage, Attachment, CallStatus, Site, CameraConfig } from './types';
 import Login from './components/Login';
 import AdminDashboard from './components/AdminDashboard';
 import FieldDashboard from './components/FieldDashboard';
@@ -7,10 +7,47 @@ import { Peer, DataConnection, MediaConnection } from 'peerjs';
 
 const App: React.FC = () => {
   const [currentRole, setCurrentRole] = useState<UserRole>(UserRole.NONE);
-  const [siteId, setSiteId] = useState<string>("");
+  const [siteId, setSiteId] = useState<string>(""); // Current active site ID
   const [userName, setUserName] = useState<string>(""); 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  
+  // Chat Messages Management (Persisted per site)
+  const [allMessages, setAllMessages] = useState<Record<string, ChatMessage[]>>(() => {
+    if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('genbalink_all_messages');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                // Hydrate dates
+                Object.keys(parsed).forEach(key => {
+                    parsed[key] = parsed[key].map((m: any) => ({
+                        ...m,
+                        timestamp: new Date(m.timestamp)
+                    }));
+                });
+                return parsed;
+            } catch (e) {
+                console.error("Failed to load messages", e);
+            }
+        }
+    }
+    return {};
+  });
+
+  // Relay Images State (Admin Side) - Map camera ID to base64 image string
+  const [relayImages, setRelayImages] = useState<Record<string, string>>({});
+
+  // Save messages to local storage whenever they change
+  useEffect(() => {
+      localStorage.setItem('genbalink_all_messages', JSON.stringify(allMessages));
+  }, [allMessages]);
+
+  // Derived state for current view
+  const currentMessages = siteId ? (allMessages[siteId] || []) : [];
+
   const [incomingAlert, setIncomingAlert] = useState(false);
+  
+  // Sites Management (For Admin)
+  const [sites, setSites] = useState<Site[]>([]);
   
   // remoteStream: 相手の映像 (AdminにとってはFieldの映像、FieldにとってはAdminの映像)
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -26,22 +63,29 @@ const App: React.FC = () => {
   const mediaConnRef = useRef<MediaConnection | null>(null); // 通話管理用
   const retryIntervalRef = useRef<any>(null);
 
+  // Ref to hold startConnectionRetry to avoid circular dependency
+  const startConnectionRetryRef = useRef<() => void>(() => {});
+
   // --- メッセージ受信処理 (共通) ---
-  const handleDataReceived = useCallback((data: any) => {
-    console.log("Data received:", data);
+  const handleDataReceived = useCallback(async (data: any) => {
+    // console.log("Data received:", data.type); // Reduce log noise for relay
     const { type, payload } = data;
     
     if (type === 'CHAT') {
-       setMessages(prev => {
+       setAllMessages(prev => {
+         const siteMsgs = prev[siteId] || [];
          const incomingMsg = { ...payload, timestamp: new Date(payload.timestamp) };
-         if (prev.some(m => m.id === incomingMsg.id)) return prev;
-         return [...prev, incomingMsg];
+         if (siteMsgs.some(m => m.id === incomingMsg.id)) return prev;
+         
+         return {
+             ...prev,
+             [siteId]: [...siteMsgs, incomingMsg]
+         };
        });
     } else if (type === 'ALERT') {
        setIncomingAlert(true);
        setTimeout(() => setIncomingAlert(false), 5000);
     } else if (type === 'REQUEST_STREAM') {
-       // 現場側: 映像要求を受け取ったらトリガーイベント発火
        window.dispatchEvent(new CustomEvent('TRIGGER_CALL_ADMIN'));
     } else if (type === 'CALL_START') {
         setCallStatus('incoming');
@@ -49,8 +93,43 @@ const App: React.FC = () => {
         setCallStatus('connected');
     } else if (type === 'CALL_END') {
         setCallStatus('idle');
+    } else if (type === 'RELAY_REQUEST') {
+        // [Field Side] Admin requested a camera image relay
+        // Payload: { cameraId, url }
+        try {
+            // Attempt to fetch the local camera image
+            // NOTE: This assumes the camera supports CORS or browser security is permissive
+            const response = await fetch(payload.url, { mode: 'cors' });
+            if (!response.ok) throw new Error('Network response was not ok');
+            const blob = await response.blob();
+            
+            // Convert to Base64
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64data = reader.result as string;
+                if (connRef.current && connRef.current.open) {
+                    connRef.current.send({
+                        type: 'RELAY_RESPONSE',
+                        payload: {
+                            cameraId: payload.cameraId,
+                            image: base64data
+                        }
+                    });
+                }
+            };
+            reader.readAsDataURL(blob);
+        } catch (error) {
+            console.error("Relay Fetch Error (CORS?):", error);
+            // Optionally send back an error state
+        }
+    } else if (type === 'RELAY_RESPONSE') {
+        // [Admin Side] Received relayed image from Field
+        setRelayImages(prev => ({
+            ...prev,
+            [payload.cameraId]: payload.image
+        }));
     }
-  }, []);
+  }, [siteId]);
 
   // --- 接続確立後のセットアップ ---
   const setupConnection = useCallback((conn: DataConnection) => {
@@ -65,7 +144,6 @@ const App: React.FC = () => {
           retryIntervalRef.current = null;
       }
 
-      // 既存のリスナーを削除
       conn.off('data');
       conn.off('close');
       conn.off('error');
@@ -77,7 +155,8 @@ const App: React.FC = () => {
          setPeerStatus('切断: 再接続待機中...');
          connRef.current = null;
          setCallStatus('idle');
-         startConnectionRetry();
+         setRemoteStream(null);
+         startConnectionRetryRef.current();
       });
       
       conn.on('error', (err) => {
@@ -106,9 +185,7 @@ const App: React.FC = () => {
 
   const startConnectionRetry = useCallback(() => {
       if (retryIntervalRef.current) clearInterval(retryIntervalRef.current);
-      // 即時実行
       connectToTarget();
-      // 定期実行
       retryIntervalRef.current = setInterval(() => {
           if (!connRef.current || !connRef.current.open) {
               connectToTarget();
@@ -116,12 +193,25 @@ const App: React.FC = () => {
       }, 3000);
   }, [connectToTarget]);
 
+  // Keep ref synced
+  useEffect(() => {
+    startConnectionRetryRef.current = startConnectionRetry;
+  }, [startConnectionRetry]);
 
   // --- Peer初期化 ---
   useEffect(() => {
     if (!siteId || currentRole === UserRole.NONE) return;
 
-    if (peerRef.current) peerRef.current.destroy();
+    if (peerRef.current) {
+        if (retryIntervalRef.current) clearInterval(retryIntervalRef.current);
+        if (connRef.current) connRef.current.close();
+        peerRef.current.destroy();
+        peerRef.current = null;
+        connRef.current = null;
+        setRemoteStream(null);
+        setCallStatus('idle');
+        setRelayImages({}); // Clear images on disconnect
+    }
 
     const myPeerId = currentRole === UserRole.FIELD ? siteId : `${siteId}-admin`;
     console.log(`Initializing Peer with ID: ${myPeerId}`);
@@ -138,7 +228,6 @@ const App: React.FC = () => {
 
     peer.on('connection', (conn) => {
       console.log('Incoming Data Connection');
-      // すでにOpenしている場合のハンドリング (ここが重要)
       if (conn.open) {
           setupConnection(conn);
       } else {
@@ -146,7 +235,6 @@ const App: React.FC = () => {
       }
     });
 
-    // 映像着信処理
     peer.on('call', (call) => {
       console.log('Incoming Video Call from:', call.peer);
       call.answer(); 
@@ -162,7 +250,7 @@ const App: React.FC = () => {
       if (err.type === 'unavailable-id') {
          setPeerStatus('ID重複エラー: 既にログイン中です');
       } else if (err.type !== 'peer-unavailable') {
-         // エラーログのみ
+         // Log
       }
     });
 
@@ -173,7 +261,7 @@ const App: React.FC = () => {
 
     return () => {
       if (retryIntervalRef.current) clearInterval(retryIntervalRef.current);
-      peer.destroy();
+      if (peerRef.current) peerRef.current.destroy();
       peerRef.current = null;
     };
   }, [siteId, currentRole, setupConnection, startConnectionRetry]);
@@ -189,7 +277,6 @@ const App: React.FC = () => {
             return;
         }
         const adminId = `${siteId}-admin`;
-        console.log(`Calling Admin (${adminId}) with stream...`);
         const call = peerRef.current.call(adminId, localStream);
         mediaConnRef.current = call;
     };
@@ -199,9 +286,8 @@ const App: React.FC = () => {
   }, [currentRole, siteId, localStream]);
 
 
-  // --- 管理者用: ストリーム更新処理 (カメラ or 画面共有) ---
+  // --- 管理者用: ストリーム更新処理 ---
   const handleAdminStreamChange = useCallback((stream: MediaStream | null) => {
-      // 既存のストリームがあれば停止
       if (localStream) {
           localStream.getTracks().forEach(track => track.stop());
       }
@@ -209,13 +295,9 @@ const App: React.FC = () => {
           mediaConnRef.current.close();
           mediaConnRef.current = null;
       }
-
       setLocalStream(stream);
-
-      // 新しいストリームがあれば発信
       if (stream && peerRef.current) {
           const targetId = siteId;
-          console.log(`Calling Field (${targetId}) with updated stream...`);
           const call = peerRef.current.call(targetId, stream);
           mediaConnRef.current = call;
       }
@@ -235,7 +317,6 @@ const App: React.FC = () => {
           connRef.current.send({ type: 'CALL_ACCEPT' });
           setCallStatus('connected');
           
-          // Ensure we are sending video/audio if not already
           if (currentRole === UserRole.ADMIN && !localStream) {
              try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -252,23 +333,59 @@ const App: React.FC = () => {
       setCallStatus('idle');
   };
 
+  // --- Relay Trigger Logic (Admin Only) ---
+  const triggerRelayRequest = (camera: CameraConfig) => {
+      if (currentRole === UserRole.ADMIN && connRef.current && connRef.current.open && camera.isRelay) {
+          // Add a timestamp to prevent caching on the Field device side
+          const urlWithTs = `${camera.url}${camera.url.includes('?') ? '&' : '?'}t=${Date.now()}`;
+          connRef.current.send({
+              type: 'RELAY_REQUEST',
+              payload: {
+                  cameraId: camera.id,
+                  url: urlWithTs
+              }
+          });
+      }
+  };
 
   // --- UI Actions ---
-  const handleLogin = (role: UserRole, id: string, name: string) => {
+  const handleLogin = (role: UserRole, id: string, name: string, initialSites?: Site[]) => {
     setSiteId(id);
     setCurrentRole(role);
-    
-    // Name Logic: Field is always "現地", Admin uses input or defaults to "管理者"
     const effectiveName = role === UserRole.FIELD ? "現地" : (name || "管理者");
     setUserName(effectiveName);
+    if (initialSites) setSites(initialSites);
+    setAllMessages(prev => {
+        if (!prev[id] || prev[id].length === 0) {
+            return {
+                ...prev,
+                [id]: [{
+                  id: 'welcome',
+                  sender: 'AI',
+                  text: `システム起動: ID [${id}]`,
+                  timestamp: new Date(),
+                  isRead: true
+                }]
+            };
+        }
+        return prev;
+    });
+  };
 
-    setMessages([{
-      id: 'welcome',
-      sender: 'AI',
-      text: `システム起動: ID [${id}]`,
-      timestamp: new Date(),
-      isRead: true
-    }]);
+  const handleSwitchSite = (newSiteId: string) => {
+      if (newSiteId === siteId) return;
+      setAllMessages(prev => {
+          if (!prev[newSiteId]) return { ...prev, [newSiteId]: [] };
+          return prev;
+      });
+      setSiteId(newSiteId);
+      setRelayImages({}); // Clear relay images
+  };
+
+  const handleAddSite = (newSite: Site) => {
+      const updated = [...sites, newSite];
+      setSites(updated);
+      localStorage.setItem('genbalink_sites', JSON.stringify(updated));
   };
 
   const sendMessageToPeer = (message: ChatMessage) => {
@@ -280,22 +397,27 @@ const App: React.FC = () => {
   const handleSendMessage = (text: string, attachment?: Attachment) => {
     const newMessage: ChatMessage = {
       id: Date.now().toString() + Math.random().toString().slice(2, 5),
-      sender: userName, // Use the stored user name
+      sender: userName,
       text,
       timestamp: new Date(),
       isRead: false,
-      attachment // Add attachment if exists
+      attachment
     };
-    setMessages(prev => [...prev, newMessage]);
+    
+    setAllMessages(prev => ({
+        ...prev,
+        [siteId]: [...(prev[siteId] || []), newMessage]
+    }));
+    
     sendMessageToPeer(newMessage);
   };
 
   const handleMarkRead = (messageId: string) => {
-    setMessages(prev => prev.map(msg => {
-        if (msg.id === messageId) {
-            return { ...msg, isRead: true };
-        }
-        return msg;
+    setAllMessages(prev => ({
+        ...prev,
+        [siteId]: (prev[siteId] || []).map(msg => 
+            msg.id === messageId ? { ...msg, isRead: true } : msg
+        )
     }));
   };
 
@@ -327,7 +449,10 @@ const App: React.FC = () => {
     return (
       <AdminDashboard 
         siteId={siteId}
-        messages={messages} 
+        sites={sites}
+        onSwitchSite={handleSwitchSite}
+        onAddSite={handleAddSite}
+        messages={currentMessages} 
         onSendMessage={handleSendMessage} 
         onTriggerAlert={handleAdminAlert}
         remoteStream={remoteStream}
@@ -341,7 +466,9 @@ const App: React.FC = () => {
         onEndCall={endCall}
         userName={userName}
         userRole={currentRole}
-        onMarkRead={handleMarkRead} // Pass function to AdminDashboard
+        onMarkRead={handleMarkRead}
+        relayImages={relayImages} // Pass relay images
+        onTriggerRelay={triggerRelayRequest} // Pass relay trigger
       />
     );
   }
@@ -349,7 +476,7 @@ const App: React.FC = () => {
   return (
     <FieldDashboard 
       siteId={siteId}
-      messages={messages} 
+      messages={currentMessages} 
       onSendMessage={handleSendMessage} 
       onTranscription={() => {}}
       incomingAlert={incomingAlert}

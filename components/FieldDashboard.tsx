@@ -8,7 +8,7 @@ interface FieldDashboardProps {
   onSendMessage: (text: string, attachment?: Attachment) => void;
   incomingAlert: boolean;
   onClearAlert: () => void;
-  onStreamReady: (stream: MediaStream) => void;
+  onStreamReady: (stream: MediaStream | null) => void;
   adminStream: MediaStream | null; 
   connectionStatus: string;
   onReconnect?: () => void;
@@ -44,6 +44,9 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   const adminVideoRef = useRef<HTMLVideoElement>(null); 
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const inactivityTimerRef = useRef<number | null>(null);
+  
+  // Local stream reference to manage tracks directly
+  const localStreamRef = useRef<MediaStream | null>(null);
 
   // Attendance State
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
@@ -108,30 +111,56 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
     };
   }, []);
 
-  // Handle Local Camera
-  useEffect(() => {
-    const startCamera = async () => {
-      try {
-        // Changed to 'user' (front facing)
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'user' }, 
-            audio: true 
-        });
-        
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.muted = true;
-        }
-        
-        onStreamReady(stream);
-
-      } catch (e) {
-        console.error("Camera failed", e);
-        alert("カメラへのアクセスを許可してください");
+  // --- Handle Local Camera (Controlled by Call Status) ---
+  const startCamera = async () => {
+    try {
+      console.log("Starting Camera for Call...");
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'user' }, 
+          audio: true 
+      });
+      
+      localStreamRef.current = stream;
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.muted = true;
       }
-    };
-    startCamera();
-  }, []);
+      
+      onStreamReady(stream);
+    } catch (e) {
+      console.error("Camera failed", e);
+      alert("カメラへのアクセスを許可してください");
+      onEndCall(); // Failed to start camera, end call
+    }
+  };
+
+  const stopCamera = () => {
+     if (localStreamRef.current) {
+         console.log("Stopping Camera...");
+         localStreamRef.current.getTracks().forEach(track => track.stop());
+         localStreamRef.current = null;
+         
+         if (videoRef.current) {
+             videoRef.current.srcObject = null;
+         }
+         onStreamReady(null);
+     }
+  };
+
+  // Sync Camera with Call Status
+  useEffect(() => {
+      if (callStatus === 'connected') {
+          startCamera();
+      } else {
+          stopCamera();
+      }
+      // Cleanup on unmount
+      return () => {
+          stopCamera();
+      };
+  }, [callStatus]);
+
 
   // Handle Admin Stream
   useEffect(() => {
@@ -468,30 +497,29 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                     style={{ objectFit: 'contain' }}
                 />
 
-                {/* 2. Local Camera (Field) - FOREGROUND LAYER (PiP) */}
-                {/* Displayed regardless of admin stream, but layout changes if admin stream is present */}
-                {/* If Admin Stream is ON: Local is PiP (Bottom Right) */}
-                {/* If Admin Stream is OFF: Local is Main (Full Screen) */}
-                <div 
-                    className={`transition-all duration-500 ease-in-out z-10 ${
-                        adminStream 
-                        ? 'absolute bottom-24 right-4 w-32 md:w-48 aspect-[3/4] md:aspect-video rounded-lg overflow-hidden border-2 border-slate-600 shadow-2xl' 
-                        : 'absolute inset-0 w-full h-full'
-                    }`}
-                >
-                    <video 
-                        ref={videoRef} 
-                        autoPlay 
-                        playsInline 
-                        muted 
-                        className="w-full h-full object-cover"
-                    />
-                    {adminStream && (
-                        <div className="absolute bottom-0 left-0 w-full bg-black/60 text-white text-[10px] text-center py-0.5 backdrop-blur-sm">
-                            自分
-                        </div>
-                    )}
-                </div>
+                {/* 2. Local Camera (Field) - Only visible when connected/streaming */}
+                {callStatus === 'connected' && (
+                    <div 
+                        className={`transition-all duration-500 ease-in-out z-10 ${
+                            adminStream 
+                            ? 'absolute bottom-24 right-4 w-32 md:w-48 aspect-[3/4] md:aspect-video rounded-lg overflow-hidden border-2 border-slate-600 shadow-2xl' 
+                            : 'absolute inset-0 w-full h-full'
+                        }`}
+                    >
+                        <video 
+                            ref={videoRef} 
+                            autoPlay 
+                            playsInline 
+                            muted 
+                            className="w-full h-full object-cover"
+                        />
+                        {adminStream && (
+                            <div className="absolute bottom-0 left-0 w-full bg-black/60 text-white text-[10px] text-center py-0.5 backdrop-blur-sm">
+                                自分
+                            </div>
+                        )}
+                    </div>
+                )}
                 
                 {/* Visual Alert Overlay (Calling) */}
                 {(incomingAlert || callStatus === 'incoming') && (
