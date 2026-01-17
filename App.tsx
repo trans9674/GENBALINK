@@ -467,6 +467,21 @@ const App: React.FC = () => {
     if (currentRole === UserRole.ADMIN && siteId) checkSiteUnreadStatus(siteId);
   };
 
+  const handleUpdateSite = async (id: string, newName: string) => {
+     await supabase.from('sites').update({ name: newName }).eq('id', id);
+  };
+
+  const handleDeleteSite = async (id: string) => {
+      // Clean up related data
+      await supabase.from('messages').delete().eq('site_id', id);
+      await supabase.from('cameras').delete().eq('site_id', id);
+      await supabase.from('sites').delete().eq('id', id);
+      
+      // Update Local State
+      setSites(prev => prev.filter(s => s.id !== id));
+      if (siteId === id) setSiteId("");
+  };
+
   const handleAdminAlert = () => {
     if (connRef.current?.open) {
         connRef.current.send({ type: 'ALERT' });
@@ -492,6 +507,8 @@ const App: React.FC = () => {
         sites={sites}
         onSwitchSite={handleSwitchSite}
         onAddSite={async (s) => { await supabase.from('sites').insert(s); }}
+        onUpdateSite={handleUpdateSite}
+        onDeleteSite={handleDeleteSite}
         messages={messages} 
         onSendMessage={handleSendMessage} 
         onTriggerAlert={handleAdminAlert}

@@ -8,6 +8,8 @@ interface AdminDashboardProps {
   sites: Site[];
   onSwitchSite: (siteId: string) => void;
   onAddSite: (site: Site) => void;
+  onUpdateSite?: (id: string, newName: string) => void; 
+  onDeleteSite?: (id: string) => void;
   messages: ChatMessage[];
   onSendMessage: (text: string, attachment?: Attachment) => void;
   onTriggerAlert: () => void;
@@ -215,6 +217,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     sites,
     onSwitchSite,
     onAddSite, 
+    onUpdateSite,
+    onDeleteSite,
     messages, 
     onSendMessage, 
     onTriggerAlert,
@@ -271,6 +275,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   
   // --- Remote Volume State ---
   const [volumeLevel, setVolumeLevel] = useState(100);
+  
+  // --- Site Action Modals (Edit/Delete) State ---
+  const [actionSite, setActionSite] = useState<Site | null>(null);
+  const [showSiteActionModal, setShowSiteActionModal] = useState(false);
+  const [showEditSiteModal, setShowEditSiteModal] = useState(false);
+  const [editSiteName, setEditSiteName] = useState('');
+  const [showDeleteSiteModal, setShowDeleteSiteModal] = useState(false);
+  const [deleteConfirmationId, setDeleteConfirmationId] = useState('');
+  
+  // Long press timer ref
+  const pressTimerRef = useRef<any>(null);
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const newVal = parseInt(e.target.value);
@@ -629,6 +644,59 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
   };
 
+  // --- Site Action Handlers ---
+  const handleSitePressStart = (site: Site) => {
+      if (pressTimerRef.current) clearTimeout(pressTimerRef.current);
+      pressTimerRef.current = setTimeout(() => {
+          setActionSite(site);
+          setShowSiteActionModal(true);
+      }, 800); // Long press duration
+  };
+
+  const handleSitePressEnd = () => {
+      if (pressTimerRef.current) {
+          clearTimeout(pressTimerRef.current);
+          pressTimerRef.current = null;
+      }
+  };
+
+  const handleSiteContextMenu = (e: React.MouseEvent, site: Site) => {
+      e.preventDefault();
+      setActionSite(site);
+      setShowSiteActionModal(true);
+  };
+
+  const initiateSiteEdit = () => {
+      if (!actionSite) return;
+      setEditSiteName(actionSite.name);
+      setShowSiteActionModal(false);
+      setShowEditSiteModal(true);
+  };
+
+  const initiateSiteDelete = () => {
+      if (!actionSite) return;
+      setDeleteConfirmationId('');
+      setShowSiteActionModal(false);
+      setShowDeleteSiteModal(true);
+  };
+
+  const submitSiteEdit = () => {
+      if (actionSite && editSiteName && onUpdateSite) {
+          onUpdateSite(actionSite.id, editSiteName);
+          setShowEditSiteModal(false);
+      }
+  };
+
+  const submitSiteDelete = () => {
+      if (actionSite && onDeleteSite) {
+          if (deleteConfirmationId !== actionSite.id) return;
+          onDeleteSite(actionSite.id);
+          setShowDeleteSiteModal(false);
+          setActionSite(null);
+      }
+  };
+
+
   return (
     <div className="h-screen flex flex-col bg-slate-950">
       {/* Header */}
@@ -767,7 +835,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                              />
                         )}
                         <button
+                            onMouseDown={() => handleSitePressStart(site)}
+                            onMouseUp={handleSitePressEnd}
+                            onMouseLeave={handleSitePressEnd}
+                            onTouchStart={() => handleSitePressStart(site)}
+                            onTouchEnd={handleSitePressEnd}
+                            onContextMenu={(e) => handleSiteContextMenu(e, site)}
                             onClick={() => {
+                                // Prevent click if long press triggered modal
+                                if (showSiteActionModal) return;
                                 if (isSelectionMode) toggleSiteSelection(site.id);
                                 else onSwitchSite(site.id);
                             }}
@@ -963,7 +1039,108 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             disabled={!siteId} // Disable chat when no site selected
           />
         </div>
-        {/* Modals ... (Rest of code is unchanged) */}
+
+        {/* --- MODALS --- */}
+
+        {/* 1. Site Action Selection Modal (Appears on Long Press / Right Click) */}
+        {showSiteActionModal && actionSite && (
+            <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={() => setShowSiteActionModal(false)}>
+                <div className="bg-slate-900 border border-slate-700 rounded-xl w-64 shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+                    <div className="p-4 border-b border-slate-800 bg-slate-800/50">
+                        <h3 className="font-bold text-white text-lg truncate">{actionSite.name}</h3>
+                        <p className="text-xs text-slate-400 font-mono">{actionSite.id}</p>
+                    </div>
+                    <div className="flex flex-col">
+                        <button 
+                            onClick={initiateSiteEdit}
+                            className="p-4 text-left text-blue-400 hover:text-white hover:bg-blue-600/20 font-bold transition-colors border-b border-slate-800 flex items-center gap-3"
+                        >
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                            名称を変更
+                        </button>
+                        <button 
+                            onClick={initiateSiteDelete}
+                            className="p-4 text-left text-red-500 hover:text-white hover:bg-red-600 font-bold transition-colors flex items-center gap-3"
+                        >
+                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            現場を削除
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* 2. Site Edit Name Modal */}
+        {showEditSiteModal && actionSite && (
+            <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
+                <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+                    <h2 className="text-xl font-bold text-white mb-4">名称変更</h2>
+                    <input 
+                        type="text" 
+                        value={editSiteName} 
+                        onChange={e => setEditSiteName(e.target.value)}
+                        className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none mb-4"
+                        placeholder="新しい現場名"
+                    />
+                    <div className="flex justify-end gap-3">
+                        <button onClick={() => setShowEditSiteModal(false)} className="px-3 py-2 text-slate-400 hover:text-white text-sm font-bold">キャンセル</button>
+                        <button onClick={submitSiteEdit} disabled={!editSiteName.trim()} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm font-bold">保存</button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* 3. Site Delete Confirmation Modal (Safety Check) */}
+        {showDeleteSiteModal && actionSite && (
+             <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md">
+                <div className="bg-slate-900 border-2 border-red-900 rounded-2xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
+                    <div className="flex items-center gap-3 mb-4 text-red-500">
+                        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                        <h2 className="text-xl font-black tracking-wider">完全削除の確認</h2>
+                    </div>
+                    
+                    <p className="text-white font-bold text-lg mb-2">
+                        現場「{actionSite.name}」を削除しますか？
+                    </p>
+                    
+                    <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 mb-6">
+                        <p className="text-red-300 text-sm font-bold">
+                            ⚠️ 警告: この操作は取り消せません。<br/>
+                            過去のチャットのデータも全て削除されます。
+                        </p>
+                    </div>
+
+                    <div className="mb-6">
+                        <label className="block text-xs font-bold text-slate-400 mb-2">
+                            削除するには現場IDを入力してください: <span className="text-white font-mono select-all bg-slate-800 px-1 rounded">{actionSite.id}</span>
+                        </label>
+                        <input 
+                            type="text" 
+                            value={deleteConfirmationId} 
+                            onChange={e => setDeleteConfirmationId(e.target.value)}
+                            placeholder={actionSite.id}
+                            className="w-full bg-slate-950 border border-red-900/50 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-red-500 font-mono text-center tracking-widest"
+                        />
+                    </div>
+
+                    <div className="flex justify-end gap-3">
+                        <button onClick={() => setShowDeleteSiteModal(false)} className="px-4 py-3 text-slate-400 hover:text-white font-bold">キャンセル</button>
+                        <button 
+                            onClick={submitSiteDelete} 
+                            disabled={deleteConfirmationId !== actionSite.id} 
+                            className={`px-6 py-3 rounded-lg font-bold text-white transition-all ${
+                                deleteConfirmationId === actionSite.id 
+                                ? 'bg-red-600 hover:bg-red-500 shadow-lg shadow-red-900/50 scale-100' 
+                                : 'bg-slate-800 text-slate-600 cursor-not-allowed scale-95 opacity-50'
+                            }`}
+                        >
+                            削除を実行
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* Broadcast Modal */}
         {showBroadcastModal && (
             <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
