@@ -211,9 +211,16 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
 
   // Handle Admin Stream
   useEffect(() => {
-    if (adminVideoRef.current && adminStream) {
-        adminVideoRef.current.srcObject = adminStream;
-        adminVideoRef.current.play().catch(e => console.error("Admin video play error", e));
+    // We attach/detach the stream to the always-mounted video element
+    if (adminVideoRef.current) {
+        if (adminStream) {
+            adminVideoRef.current.srcObject = adminStream;
+            // Explicit play attempt for iPadOS
+            adminVideoRef.current.play().catch(e => console.log("Admin video play error", e));
+        } else {
+            // Optional: clear srcObject to avoid frozen frame, but only if stream is truly gone
+            adminVideoRef.current.srcObject = null;
+        }
     }
   }, [adminStream]);
 
@@ -581,39 +588,37 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
         </div>
 
         {/* Main Content Area (Merged) */}
-        <div className="flex-1 relative bg-black min-w-0">
+        <div className="flex-1 relative bg-black min-w-0 flex flex-col">
              
-             {/* 1. CHAT INTERFACE (Takes FULL Space when no screen share) */}
-             {!adminStream && (
-                 <div className="absolute inset-0 z-10 bg-slate-900">
-                     <ChatInterface 
-                        messages={messages} 
-                        onSendMessage={onSendMessage} 
-                        userName={userName}
-                        onMarkRead={onMarkRead}
-                        userRole={userRole}
-                        onDeleteMessage={onDeleteMessage} 
-                        chatTitle={`${siteId} 現場チャット`}
-                        largeMode={true}
-                     />
-                 </div>
-             )}
+             {/* 1. CHAT LAYER - Visible when NO admin stream */}
+             {/* Uses opacity/pointer-events instead of unmounting to preserve state/scroll */}
+             <div className={`absolute inset-0 bg-slate-900 z-10 transition-opacity duration-300 flex flex-col ${adminStream ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                 <ChatInterface 
+                    messages={messages} 
+                    onSendMessage={onSendMessage} 
+                    userName={userName}
+                    onMarkRead={onMarkRead}
+                    userRole={userRole}
+                    onDeleteMessage={onDeleteMessage} 
+                    chatTitle={`${siteId} 現場チャット`}
+                    largeMode={true}
+                 />
+             </div>
 
-             {/* 2. ADMIN VIDEO (Screen Share - Takes FULL Space when active) */}
-             {adminStream && (
-                 <div className="absolute inset-0 z-10 bg-black flex items-center justify-center">
-                    <video 
-                        ref={adminVideoRef} 
-                        autoPlay 
-                        playsInline 
-                        className="w-full h-full object-contain"
-                    />
-                 </div>
-             )}
+             {/* 2. ADMIN VIDEO LAYER (Screen Share/Video Call) */}
+             {/* Always mounted to handle stream attachment correctly on iPad */}
+             <div className={`absolute inset-0 bg-black flex items-center justify-center transition-opacity duration-300 ${adminStream ? 'z-20 opacity-100' : 'z-0 opacity-0 pointer-events-none'}`}>
+                <video 
+                    ref={adminVideoRef} 
+                    autoPlay 
+                    playsInline 
+                    className="w-full h-full object-contain"
+                />
+             </div>
 
              {/* 3. LOCAL CAMERA (PiP - Always floating on bottom right) */}
              {callStatus === 'connected' && !cameraOffEndTime && (
-                 <div className="absolute bottom-4 right-4 w-48 aspect-video rounded-lg overflow-hidden border-2 border-slate-600 shadow-2xl z-20 bg-black">
+                 <div className="absolute bottom-4 right-4 w-48 aspect-video rounded-lg overflow-hidden border-2 border-slate-600 shadow-2xl z-30 bg-black">
                      <video 
                          ref={videoRef} 
                          autoPlay 
@@ -631,7 +636,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
              
              {/* 4. Privacy Mode Overlay (In PiP location if active) */}
              {cameraOffEndTime && (
-                 <div className="absolute bottom-4 right-4 w-48 aspect-video rounded-lg overflow-hidden border-2 border-red-900/50 shadow-2xl z-20 bg-black/80 flex flex-col items-center justify-center">
+                 <div className="absolute bottom-4 right-4 w-48 aspect-video rounded-lg overflow-hidden border-2 border-red-900/50 shadow-2xl z-30 bg-black/80 flex flex-col items-center justify-center">
                      <svg className="w-8 h-8 text-slate-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
                      </svg>
