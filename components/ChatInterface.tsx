@@ -7,9 +7,10 @@ interface ChatInterfaceProps {
   userName: string;
   onMarkRead?: (id: string) => void;
   userRole?: UserRole;
+  chatTitle?: string; // Added prop for custom title
 }
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, userName, onMarkRead, userRole }) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, userName, onMarkRead, userRole, chatTitle }) => {
   const [input, setInput] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -100,7 +101,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
             }}
         >
           <div className="p-4 border-b border-slate-800 bg-slate-900 flex justify-between items-center">
-            <h3 className="font-semibold text-slate-200 text-lg">現場チャット</h3>
+            <h3 className="font-semibold text-slate-200 text-lg">{chatTitle || '現場チャット'}</h3>
             {isDragOver && <span className="text-xs text-blue-400 font-bold animate-pulse">ファイルをドロップして送信</span>}
           </div>
           

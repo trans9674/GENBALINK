@@ -115,10 +115,18 @@ const SurveillanceCamera: React.FC<{
                              </div>
                         </div>
                     ) : (
-                        <>
-                            <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
-                            <span className="text-[10px] text-slate-500">Connecting via Relay...</span>
-                        </>
+                        config.isRelay ? (
+                            <>
+                                <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                                <span className="text-[10px] text-slate-500">Connecting via Relay...</span>
+                            </>
+                        ) : (
+                             <div className="flex flex-col items-center justify-center text-slate-500">
+                                <div className="animate-pulse w-8 h-8 bg-slate-800 rounded-full mb-2"></div>
+                                <span className="text-[10px]">Connecting...</span>
+                                <span className="text-[9px] mt-1 text-slate-600">Admin端末から直接アクセス中</span>
+                             </div>
+                        )
                     )}
                 </div>
             )}
@@ -258,7 +266,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     onStreamReady(null); 
   };
 
-  // --- Toggle Camera ---
+  // --- Toggle Camera (Unused but kept for logic consistency) ---
   const toggleCamera = async () => {
     const wasScreenSharing = isScreenSharing;
 
@@ -508,16 +516,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setNewCamera(prev => ({
           ...prev,
           url: 'http://192.168.11.21/cgi-bin/api.cgi?cmd=Snap&channel=0&user=admin&password=genbalink01',
-          isRelay: true // Enforce relay since browser can't do P2P UID
+          isRelay: false, // Changed: Disable relay to use direct Wifi connection
+          type: 'snapshot',
+          refreshInterval: 500
       }));
   };
+
+  // Helper to get site name
+  const currentSiteName = sites.find(s => s.id === siteId)?.name || '';
 
   return (
     <div className="h-screen flex flex-col bg-slate-950">
       {/* Header */}
       <div className="h-24 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-10 shadow-md z-10 shrink-0">
         <div className="flex items-center gap-8">
-            <h1 className="text-3xl font-bold text-white tracking-widest">GENBA<span className="text-orange-500">LINK</span> <span className="text-slate-500 text-xl ml-3 font-normal">管理者コンソール ({userName})</span></h1>
+            <h1 className="text-3xl font-bold text-white tracking-widest">GENBA<span className="text-orange-500">LINK</span> <span className="text-slate-500 text-xl ml-3 font-normal">管理者コンソール</span></h1>
         </div>
         <div className="flex items-center gap-6">
              <div className="text-base text-slate-400 mr-2 flex flex-col items-end">
@@ -555,19 +568,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
              )}
 
              <button 
-                onClick={toggleCamera}
-                className={`px-8 py-3.5 rounded-xl text-lg font-bold shadow-lg transition-all border ${
-                    localStream && !isScreenSharing
-                    ? 'bg-red-600 border-red-500 text-white hover:bg-red-700 animate-pulse' 
-                    : isScreenSharing
-                        ? 'bg-emerald-600 border-emerald-500 text-white hover:bg-emerald-700' 
-                        : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
-                }`}
-             >
-                {localStream && !isScreenSharing ? '配信停止' : isScreenSharing ? 'カメラに戻る' : 'ライブカメラ'}
-             </button>
-
-             <button 
                 onClick={isScreenSharing ? stopScreenShare : startScreenShare}
                 className={`px-8 py-3.5 rounded-xl text-lg font-bold shadow-lg transition-all border flex items-center gap-3 ${
                     isScreenSharing
@@ -575,7 +575,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
                 }`}
              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                 {isScreenSharing ? '共有停止' : '画面共有'}
              </button>
 
@@ -609,16 +609,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <button
                         key={site.id}
                         onClick={() => onSwitchSite(site.id)}
-                        className={`w-full text-left p-3 rounded-lg border transition-all ${
+                        className={`w-full text-left p-3 rounded-lg border transition-all duration-200 ${
                             siteId === site.id 
-                            ? 'bg-blue-900/30 border-blue-600 shadow-lg shadow-blue-900/20' 
+                            ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.6)] scale-105 z-10 border-blue-400 ring-1 ring-blue-300' 
                             : 'bg-slate-800/50 border-slate-700 hover:bg-slate-800 hover:border-slate-600 text-slate-400'
                         }`}
                     >
                         <div className={`font-bold ${siteId === site.id ? 'text-white' : 'text-slate-300'}`}>{site.name}</div>
-                        <div className="text-[10px] text-slate-500 mt-1 flex justify-between">
+                        <div className={`text-xs mt-1 flex justify-between ${siteId === site.id ? 'text-blue-100' : 'text-slate-500'}`}>
                             <span>{site.id}</span>
-                            {siteId === site.id && <span className="text-green-400 animate-pulse">● 接続中</span>}
+                            {siteId === site.id && <span className="text-green-300 animate-pulse font-bold">● 接続中</span>}
                         </div>
                     </button>
                 ))}
@@ -633,7 +633,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                  <div className="flex-1 bg-slate-900 rounded-lg border border-slate-800 overflow-hidden relative flex flex-col">
                     <div className="p-2 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
                         <span className="text-sm font-bold text-orange-400 flex items-center gap-2">
-                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                              画面共有 & 指示モード
                         </span>
                     </div>
@@ -756,6 +756,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             userName={userName} 
             userRole={userRole} 
             onMarkRead={onMarkRead} 
+            chatTitle={currentSiteName ? `${currentSiteName} 現場チャット` : '現場チャット'}
           />
         </div>
 
@@ -763,7 +764,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {showCameraModal && (
             <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
                 <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl">
-                    <h2 className="text-xl font-bold text-white mb-4">監視カメラを追加 ({siteId})</h2>
+                    <h2 className="text-xl font-bold text-white mb-4">Liveカメラを追加 ({siteId})</h2>
                     <div className="space-y-4">
                         <div>
                             <label className="block text-xs font-bold text-slate-400 mb-1">カメラ名</label>
@@ -811,7 +812,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 placeholder={newCamera.isRelay ? "http://192.168.1.100/api/snapshot.jpg" : "http://192.168.1.100/video.mjpg"} 
                                 className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none font-mono text-xs" 
                             />
-                            {newCamera.isRelay && (
+                            {newCamera.isRelay ? (
                                 <div className="mt-1 space-y-1">
                                     <div className="text-[10px] text-yellow-500">
                                         ※ Relayモードでは動画ストリームURL(.mjpg)は使用できません。必ず静止画(Snapshot)のURLを入力してください。
@@ -819,6 +820,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                     <div className="text-[10px] text-blue-400">
                                         ※ URL内の「user=admin」と「password=...」を実際のカメラ設定に合わせて変更してください。
                                     </div>
+                                </div>
+                            ) : (
+                                <div className="mt-1 text-[10px] text-slate-400">
+                                    ・カメラは現場に設置したルーターでWifi接続する。PCと同じネットワーク(WiFi)ではない。
                                 </div>
                             )}
                         </div>

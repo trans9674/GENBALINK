@@ -5,9 +5,17 @@ interface LoginProps {
   onLogin: (role: UserRole, siteId: string, name: string, sites?: Site[]) => void;
 }
 
+const MOCK_2FA_CODE = "8888"; // Demo purposes
+const MAX_ATTEMPTS = 3;
+const LOCKOUT_DURATION = 60 * 60 * 1000; // 1 hour
+
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [activeTab, setActiveTab] = useState<UserRole>(UserRole.ADMIN);
   
+  // Login Steps: 'input' (password) -> 'verify' (2FA)
+  const [loginStep, setLoginStep] = useState<'input' | 'verify'>('input');
+  const [verificationCode, setVerificationCode] = useState('');
+
   // Field Inputs
   const [fieldSiteId, setFieldSiteId] = useState('');
   const [fieldPassword, setFieldPassword] = useState('');
@@ -17,13 +25,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [adminName, setAdminName] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [sites, setSites] = useState<Site[]>([]);
-  const [newSiteId, setNewSiteId] = useState('');
-  const [newSiteName, setNewSiteName] = useState('');
-  const [showAddSite, setShowAddSite] = useState(false);
-
+  
   const [error, setError] = useState('');
 
-  // Load saved sites on mount
+  // Lockout State
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
+
+  // Load saved sites and check lockout on mount
   useEffect(() => {
     const saved = localStorage.getItem('genbalink_sites');
     if (saved) {
@@ -35,35 +43,75 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     }
     const savedName = localStorage.getItem('genbalink_admin_name');
     if (savedName) setAdminName(savedName);
+
+    // Check Lockout
+    const storedLockout = localStorage.getItem('genbalink_auth_lockout');
+    if (storedLockout) {
+        const lockoutTime = parseInt(storedLockout, 10);
+        if (lockoutTime > Date.now()) {
+            setLockoutUntil(lockoutTime);
+        } else {
+            // Expired
+            localStorage.removeItem('genbalink_auth_lockout');
+            localStorage.removeItem('genbalink_auth_attempts');
+        }
+    }
   }, []);
 
-  const handleAddSite = () => {
-    if (!newSiteId.trim() || !newSiteName.trim()) {
-      setError('現場IDと現場名を入力してください');
-      return;
-    }
-    if (sites.some(s => s.id === newSiteId.trim())) {
-      setError('この現場IDは既に登録されています');
-      return;
-    }
-    const newSite: Site = { id: newSiteId.trim(), name: newSiteName.trim() };
-    const updatedSites = [...sites, newSite];
-    setSites(updatedSites);
-    localStorage.setItem('genbalink_sites', JSON.stringify(updatedSites));
-    
-    setNewSiteId('');
-    setNewSiteName('');
-    setShowAddSite(false);
-    setError('');
+  const isLocked = lockoutUntil !== null && lockoutUntil > Date.now();
+
+  const executeAdminLogin = () => {
+     localStorage.setItem('genbalink_admin_name', adminName || '管理者');
+     // Default to first site or empty
+     const initialSiteId = sites.length > 0 ? sites[0].id : '';
+     onLogin(UserRole.ADMIN, initialSiteId, adminName || '管理者', sites);
   };
 
-  const handleAdminLogin = (siteId: string) => {
-    if (!adminPassword.trim()) { // Simplified password check
+  const handleAdminLoginAttempt = () => {
+    if (isLocked) return;
+
+    if (!adminPassword.trim()) { 
        setError('パスワードを入力してください');
        return;
     }
-    localStorage.setItem('genbalink_admin_name', adminName || '管理者');
-    onLogin(UserRole.ADMIN, siteId, adminName || '管理者', sites);
+
+    // 1. Check Password (Mock check)
+    // Assuming "password ok" if not empty for this demo structure.
+    
+    // 2. Check Trusted Device
+    const isTrusted = localStorage.getItem('genbalink_is_trusted_device');
+    
+    if (isTrusted === 'true') {
+        // Trusted device -> Login directly
+        executeAdminLogin();
+    } else {
+        // Untrusted device -> Require 2FA
+        setError('');
+        setLoginStep('verify');
+    }
+  };
+
+  const handleVerifyCode = () => {
+      if (isLocked) return;
+
+      if (verificationCode === MOCK_2FA_CODE) {
+          // Success
+          localStorage.setItem('genbalink_is_trusted_device', 'true');
+          localStorage.removeItem('genbalink_auth_attempts');
+          localStorage.removeItem('genbalink_auth_lockout');
+          executeAdminLogin();
+      } else {
+          const currentAttempts = parseInt(localStorage.getItem('genbalink_auth_attempts') || '0', 10) + 1;
+          localStorage.setItem('genbalink_auth_attempts', currentAttempts.toString());
+          
+          if (currentAttempts >= MAX_ATTEMPTS) {
+              const lockTime = Date.now() + LOCKOUT_DURATION;
+              localStorage.setItem('genbalink_auth_lockout', lockTime.toString());
+              setLockoutUntil(lockTime);
+          } else {
+              setError('認証コードが間違っています');
+          }
+      }
   };
 
   const handleFieldLogin = () => {
@@ -72,13 +120,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
        return;
     }
     onLogin(UserRole.FIELD, fieldSiteId.trim(), fieldName.trim());
-  };
-
-  const handleDeleteSite = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    const updated = sites.filter(s => s.id !== id);
-    setSites(updated);
-    localStorage.setItem('genbalink_sites', JSON.stringify(updated));
   };
 
   return (
@@ -95,117 +136,115 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           <p className="text-slate-400">セキュア現場接続ゲートウェイ</p>
         </div>
         
-        <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
-          {/* Tabs */}
-          <div className="flex border-b border-slate-800">
-            <button 
-              onClick={() => { setActiveTab(UserRole.ADMIN); setError(''); }}
-              className={`flex-1 py-4 text-sm font-bold transition-colors ${activeTab === UserRole.ADMIN ? 'bg-slate-800 text-blue-400' : 'text-slate-500 hover:text-slate-300'}`}
-            >
-              管理者 (PC)
-            </button>
-            <button 
-              onClick={() => { setActiveTab(UserRole.FIELD); setError(''); }}
-              className={`flex-1 py-4 text-sm font-bold transition-colors ${activeTab === UserRole.FIELD ? 'bg-slate-800 text-orange-400' : 'text-slate-500 hover:text-slate-300'}`}
-            >
-              現場端末 (iPad)
-            </button>
-          </div>
+        <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-2xl overflow-hidden transition-all duration-300">
+          
+          {/* Header / Tabs - Hide tabs during 2FA verify step or Lockout */}
+          {loginStep === 'input' && !isLocked && (
+            <div className="flex border-b border-slate-800">
+                <button 
+                onClick={() => { setActiveTab(UserRole.ADMIN); setError(''); }}
+                className={`flex-1 py-4 text-sm font-bold transition-colors ${activeTab === UserRole.ADMIN ? 'bg-slate-800 text-blue-400' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                管理者 (PC)
+                </button>
+                <button 
+                onClick={() => { setActiveTab(UserRole.FIELD); setError(''); }}
+                className={`flex-1 py-4 text-sm font-bold transition-colors ${activeTab === UserRole.FIELD ? 'bg-slate-800 text-orange-400' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                現場端末 (iPad)
+                </button>
+            </div>
+          )}
 
           <div className="p-8">
             {activeTab === UserRole.ADMIN ? (
-              // ADMIN VIEW
-              <div className="space-y-6">
-                <div>
-                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">管理者名</label>
-                   <input 
-                      type="text" 
-                      value={adminName}
-                      onChange={(e) => setAdminName(e.target.value)}
-                      placeholder="管理者"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
-                   />
-                </div>
-                <div>
-                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">共通パスワード</label>
-                   <input 
-                      type="password" 
-                      value={adminPassword}
-                      onChange={(e) => setAdminPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
-                   />
-                </div>
-
-                <div className="border-t border-slate-800 pt-4">
-                    <div className="flex justify-between items-center mb-4">
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">登録済みの現場</label>
-                        <button 
-                            onClick={() => setShowAddSite(!showAddSite)}
-                            className="text-xs text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1"
-                        >
-                            {showAddSite ? 'キャンセル' : '+ 現場を追加'}
-                        </button>
+              // --- ADMIN LOGIN FLOW ---
+              isLocked ? (
+                  <div className="flex flex-col items-center justify-center py-12 animate-in fade-in">
+                      <div className="w-20 h-20 bg-red-900/20 rounded-full flex items-center justify-center mb-6 border border-red-900/50">
+                          <svg className="w-10 h-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                          </svg>
+                      </div>
+                      <h3 className="text-xl font-bold text-red-500">ロックされました。</h3>
+                  </div>
+              ) : loginStep === 'input' ? (
+                // Step 1: Password Input
+                <div className="space-y-6">
+                    <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">管理者名</label>
+                    <input 
+                        type="text" 
+                        value={adminName}
+                        onChange={(e) => setAdminName(e.target.value)}
+                        placeholder="管理者"
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
+                    />
+                    </div>
+                    <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">共通パスワード</label>
+                    <input 
+                        type="password" 
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500"
+                    />
                     </div>
 
-                    {showAddSite && (
-                        <div className="mb-4 p-4 bg-slate-800 rounded-lg border border-slate-700 animate-in slide-in-from-top-2">
-                             <div className="space-y-3">
-                                <input 
-                                    type="text" 
-                                    value={newSiteName}
-                                    onChange={(e) => setNewSiteName(e.target.value)}
-                                    placeholder="現場名 (例: 山田邸)"
-                                    className="w-full bg-slate-950 border border-slate-600 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none"
-                                />
-                                <input 
-                                    type="text" 
-                                    value={newSiteId}
-                                    onChange={(e) => setNewSiteId(e.target.value)}
-                                    placeholder="現場ID (例: GENBA-001)"
-                                    className="w-full bg-slate-950 border border-slate-600 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none"
-                                />
-                                <button 
-                                    onClick={handleAddSite}
-                                    className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 rounded text-sm font-bold"
-                                >
-                                    保存
-                                </button>
-                             </div>
+                    <button 
+                    onClick={handleAdminLoginAttempt}
+                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-blue-900/20 transition-all active:scale-95"
+                    >
+                    管理者としてログイン
+                    </button>
+                    
+                    <div className="text-xs text-center text-slate-500 mt-4">
+                        ※ 現場の追加・編集はログイン後に行えます
+                    </div>
+                </div>
+              ) : (
+                // Step 2: 2FA Verification
+                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                    <div className="text-center mb-6">
+                        <div className="w-16 h-16 bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-500/30">
+                            <svg className="w-8 h-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                         </div>
-                    )}
-
-                    <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
-                        {sites.length === 0 && !showAddSite && (
-                            <div className="text-center text-slate-600 text-sm py-4">登録された現場はありません</div>
-                        )}
-                        {sites.map(site => (
-                            <div 
-                                key={site.id}
-                                onClick={() => handleAdminLogin(site.id)}
-                                className="group flex justify-between items-center p-3 bg-slate-950 border border-slate-700 hover:border-blue-500 rounded-lg cursor-pointer transition-all hover:bg-slate-800"
-                            >
-                                <div>
-                                    <div className="font-bold text-white group-hover:text-blue-400">{site.name}</div>
-                                    <div className="text-xs text-slate-500">{site.id}</div>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <span className="text-xs text-blue-500 font-bold opacity-0 group-hover:opacity-100 transition-opacity">接続 &rarr;</span>
-                                    <button 
-                                        onClick={(e) => handleDeleteSite(e, site.id)}
-                                        className="text-slate-600 hover:text-red-400 p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        title="削除"
-                                    >
-                                        ×
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
+                        <h3 className="text-lg font-bold text-white">新しいデバイスを検出</h3>
+                        <p className="text-sm text-slate-400 mt-2">
+                            セキュリティ保護のため、2段階認証が必要です。<br/>
+                            管理者用認証コードを入力してください。
+                        </p>
                     </div>
+
+                    <div>
+                        <input 
+                            type="text" 
+                            value={verificationCode}
+                            onChange={(e) => setVerificationCode(e.target.value)}
+                            placeholder="認証コード (例: 8888)"
+                            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-4 text-center text-xl tracking-widest text-white focus:outline-none focus:border-blue-500"
+                            maxLength={6}
+                        />
+                    </div>
+
+                    <button 
+                        onClick={handleVerifyCode}
+                        className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg shadow-lg shadow-blue-900/20 transition-all active:scale-95"
+                    >
+                        認証してデバイスを登録
+                    </button>
+
+                    <button 
+                        onClick={() => { setLoginStep('input'); setError(''); setVerificationCode(''); }}
+                        className="w-full text-slate-500 text-sm hover:text-slate-300 py-2"
+                    >
+                        戻る
+                    </button>
                 </div>
-              </div>
+              )
             ) : (
-              // FIELD VIEW
+              // --- FIELD LOGIN FLOW ---
               <div className="space-y-6">
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">現場ID (Site ID)</label>
@@ -250,7 +289,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             )}
 
             {error && (
-              <div className="mt-4 text-red-400 text-sm bg-red-900/20 border border-red-900/50 p-3 rounded flex items-center gap-2">
+              <div className="mt-4 text-red-400 text-sm bg-red-900/20 border border-red-900/50 p-3 rounded flex items-center gap-2 animate-bounce">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 {error}
               </div>
