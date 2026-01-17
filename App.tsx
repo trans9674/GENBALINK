@@ -323,11 +323,37 @@ const App: React.FC = () => {
       }
     });
 
-    peer.on('call', (call) => {
+    peer.on('call', async (call) => {
       console.log('Incoming Video Call from:', call.peer);
-      call.answer(); 
+      // Answer automatically, but we might need to send a stream!
+      // If we are ADMIN, we usually send our stream if we have it.
+      // If we are FIELD, we send our stream.
+      
+      // Since `call.answer()` without stream acts as "receive only", 
+      // we need to be careful. The unified logic below handles initiation.
+      // However, if we receive a call, it's best to answer with a stream if available.
+      
+      let streamToAnswerWith = localStream;
+      
+      // If we don't have a stream yet, try to get it (Auto-Answer scenario)
+      if (!streamToAnswerWith) {
+          try {
+             // For Admin, we only want video if explicitly enabled, but for call handshake we might need empty or audio only?
+             // Simplification: Answer with null (receive only) and let the other logic upgrade?
+             // Better: Allow answer without stream, then add stream? PeerJS supports `call.answer(stream)`.
+             // We will answer with null for now, relying on the 'connected' logic to trigger a call OUT if needed,
+             // OR rely on the side that has the camera to call.
+             
+             // If Admin calls Field -> Field answers with stream (initiated by Field logic below).
+             // If Field calls Admin -> Admin answers.
+          } catch(e) { console.error(e); }
+      }
+
+      call.answer(streamToAnswerWith || undefined); 
+      mediaConnRef.current = call;
+
       call.on('stream', (stream) => {
-        console.log("Remote Stream Received");
+        console.log("Remote Stream Received via Incoming Call");
         setRemoteStream(stream);
       });
       call.on('error', (e) => console.error("Call Error", e));
@@ -352,10 +378,10 @@ const App: React.FC = () => {
       if (peerRef.current) peerRef.current.destroy();
       peerRef.current = null;
     };
-  }, [siteId, currentRole, setupConnection, startConnectionRetry]);
+  }, [siteId, currentRole, setupConnection, startConnectionRetry, localStream]);
 
 
-  // --- 現場用: 映像発信トリガー ---
+  // --- 現場用: 映像発信トリガー (Legacy Event) ---
   useEffect(() => {
     if (currentRole !== UserRole.FIELD) return;
 
@@ -374,11 +400,32 @@ const App: React.FC = () => {
   }, [currentRole, siteId, localStream]);
 
 
+  // --- 映像接続の自動確立ロジック (Critical Fix for "No Video") ---
+  // CallStatusがConnectedになったら、現場側から能動的にメディア接続（映像）を開始する
+  useEffect(() => {
+      if (callStatus === 'connected' && currentRole === UserRole.FIELD && localStream && peerRef.current) {
+          // Check if we already have an active media connection to avoid duplicate calls
+          if (!mediaConnRef.current || !mediaConnRef.current.open) {
+               console.log("Call Connected & Stream Ready -> Initiating PeerJS Media Call to Admin");
+               const adminId = `${siteId}-admin`;
+               const call = peerRef.current.call(adminId, localStream);
+               mediaConnRef.current = call;
+               
+               call.on('stream', (remoteS) => {
+                   setRemoteStream(remoteS);
+               });
+          }
+      }
+  }, [callStatus, currentRole, localStream, siteId]);
+
+
   // --- 管理者用: ストリーム更新処理 ---
   const handleAdminStreamChange = useCallback((stream: MediaStream | null) => {
       if (localStream) {
           localStream.getTracks().forEach(track => track.stop());
       }
+      // If we are already in a call, we might need to replace track or recall
+      // For PeerJS simpler implementation: Close and Recall
       if (mediaConnRef.current) {
           mediaConnRef.current.close();
           mediaConnRef.current = null;
@@ -389,6 +436,7 @@ const App: React.FC = () => {
           const targetId = siteId;
           const call = peerRef.current.call(targetId, stream);
           mediaConnRef.current = call;
+          call.on('stream', (rs) => setRemoteStream(rs));
       } else {
           // Explicitly signal stream stop
           if (connRef.current && connRef.current.open) {
@@ -413,8 +461,8 @@ const App: React.FC = () => {
           
           if (currentRole === UserRole.ADMIN && !localStream) {
              try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                handleAdminStreamChange(stream);
+                // Admin might want to join without video initially, or with?
+                // For now, let's keep Admin as viewer unless they share screen/cam manually
              } catch(e) { console.error("Auto cam start failed", e); }
           }
       }
@@ -424,7 +472,12 @@ const App: React.FC = () => {
       if (connRef.current && connRef.current.open) {
           connRef.current.send({ type: 'CALL_END' });
       }
+      if (mediaConnRef.current) {
+          mediaConnRef.current.close();
+          mediaConnRef.current = null;
+      }
       setCallStatus('idle');
+      setRemoteStream(null);
   };
 
   // --- Field Camera Status Handling ---
@@ -456,6 +509,7 @@ const App: React.FC = () => {
       setSiteId(newSiteId);
       setIsFieldCameraOff(false); // Reset when switching sites
       setFieldAlertVolume(1.0); // Reset volume expectation
+      setMessages([]); // Clear messages visual cache
   };
 
   const handleAddSite = async (newSite: Site) => {

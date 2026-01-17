@@ -53,6 +53,9 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const inactivityTimerRef = useRef<number | null>(null);
   
+  // Audio Context Ref for persistent audio handling
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
   // Camera Off (Privacy) Mode
   const [cameraOffEndTime, setCameraOffEndTime] = useState<number | null>(null);
   const [remainingTime, setRemainingTime] = useState('');
@@ -70,9 +73,26 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   // Urgent Notice State
   const [urgentNotice, setUrgentNotice] = useState<string | null>(null);
 
+  // --- Initialize Audio Context safely ---
+  const initAudio = useCallback(() => {
+    if (!audioCtxRef.current) {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContext) {
+            audioCtxRef.current = new AudioContext();
+        }
+    }
+    // Attempt to resume if suspended (browser policy)
+    if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume().catch(e => console.error("Audio resume failed", e));
+    }
+  }, []);
+
   // --- Auto Eco Mode Logic ---
   const resetInactivityTimer = useCallback(() => {
     if (ecoMode) setEcoMode(false);
+    
+    // Attempt to unlock audio on any interaction
+    initAudio();
     
     if (inactivityTimerRef.current) {
         window.clearTimeout(inactivityTimerRef.current);
@@ -81,7 +101,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
     inactivityTimerRef.current = window.setTimeout(() => {
         setEcoMode(true);
     }, 120000); 
-  }, [ecoMode]);
+  }, [ecoMode, initAudio]);
 
   // Initial setup and global events for inactivity
   useEffect(() => {
@@ -115,8 +135,6 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
           const lastMsg = messages[messages.length - 1];
           // We only show it if it's not from self (Admin sent it) and starts with the tag
           if (lastMsg.sender !== userName && lastMsg.text.startsWith('【共通連絡事項】')) {
-              // Simple deduping: if content is same as current notice, don't re-trigger animation?
-              // Actually, simply setting it is fine.
               setUrgentNotice(lastMsg.text.replace('【共通連絡事項】', '').trim());
               resetInactivityTimer(); // Wake up screen
           }
@@ -176,6 +194,8 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
         console.log("Camera blocked by privacy mode");
         return;
     }
+    // Avoid double start
+    if (localStreamRef.current) return;
 
     try {
       console.log("Starting Camera for Call...");
@@ -224,23 +244,16 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
       } else {
           stopCamera();
       }
-      // Cleanup on unmount
-      return () => {
-          stopCamera();
-      };
   }, [callStatus, cameraOffEndTime]);
 
 
   // Handle Admin Stream
   useEffect(() => {
-    // We attach/detach the stream to the always-mounted video element
     if (adminVideoRef.current) {
         if (adminStream) {
             adminVideoRef.current.srcObject = adminStream;
-            // Explicit play attempt for iPadOS
             adminVideoRef.current.play().catch(e => console.log("Admin video play error", e));
         } else {
-            // Optional: clear srcObject to avoid frozen frame, but only if stream is truly gone
             adminVideoRef.current.srcObject = null;
         }
     }
@@ -250,11 +263,17 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   useEffect(() => {
     if (incomingAlert || callStatus === 'incoming') {
       if (ecoMode) setEcoMode(false);
+      
+      // Ensure audio context is ready
+      initAudio();
 
       try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContext) {
-          const ctx = new AudioContext();
+        const ctx = audioCtxRef.current;
+        if (ctx) {
+          if (ctx.state === 'suspended') {
+              ctx.resume();
+          }
+
           const playTone = (freq: number, time: number, duration: number) => {
               const osc = ctx.createOscillator();
               const gain = ctx.createGain();
@@ -281,7 +300,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
         console.error("Audio playback failed", e);
       }
     }
-  }, [incomingAlert, callStatus, ecoMode, alertVolume]);
+  }, [incomingAlert, callStatus, ecoMode, alertVolume, initAudio]);
 
   // Attendance Logic
   useEffect(() => {
@@ -332,9 +351,8 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
       resetInactivityTimer();
   };
 
-  // --- Render Call Widget (Smaller Buttons for Sidebar) ---
+  // --- Render Call Widget ---
   const renderCallWidget = () => {
-      // Reduced size: w-28 h-24
       const buttonBaseClass = "w-28 h-24 rounded-xl flex flex-col items-center justify-center gap-1 shadow-xl transition-all active:scale-95 border-2";
       const iconClass = "w-8 h-8";
       const textClass = "font-bold text-sm leading-tight text-center px-1";
@@ -424,7 +442,6 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
       {urgentNotice && (
           <div className="absolute inset-0 z-[100] bg-yellow-950/90 flex flex-col items-center justify-center p-8 backdrop-blur animate-in fade-in zoom-in duration-300">
               <div className="w-full max-w-2xl bg-slate-900 border-2 border-yellow-500 rounded-3xl p-8 shadow-2xl flex flex-col items-center text-center relative overflow-hidden">
-                   {/* Background Pulse Effect */}
                    <div className="absolute top-0 left-0 w-full h-2 bg-yellow-500 animate-pulse"></div>
                    
                    <div className="w-20 h-20 bg-yellow-600 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-yellow-900/50 animate-bounce">
@@ -483,7 +500,8 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                         </button>
                     </div>
                 )}
-                {/* ... rest of attendance logic ... */}
+                
+                {/* ... rest of attendance UI ... */}
                 {attendanceStep === 'input' && (
                     <div className="space-y-6">
                          <div className={`text-center py-2 rounded font-bold text-white ${attendanceType === 'start' ? 'bg-blue-600/50' : 'bg-orange-600/50'}`}>
@@ -644,7 +662,6 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
         <div className="flex-1 relative bg-black min-w-0 flex flex-col">
              
              {/* 1. CHAT LAYER - Visible when NO admin stream */}
-             {/* Uses opacity/pointer-events instead of unmounting to preserve state/scroll */}
              <div className={`absolute inset-0 bg-slate-900 z-10 transition-opacity duration-300 flex flex-col ${adminStream ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
                  <ChatInterface 
                     messages={messages} 
@@ -658,8 +675,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                  />
              </div>
 
-             {/* 2. ADMIN VIDEO LAYER (Screen Share/Video Call) */}
-             {/* Always mounted to handle stream attachment correctly on iPad */}
+             {/* 2. ADMIN VIDEO LAYER */}
              <div className={`absolute inset-0 bg-black flex items-center justify-center transition-opacity duration-300 ${adminStream ? 'z-20 opacity-100' : 'z-0 opacity-0 pointer-events-none'}`}>
                 <video 
                     ref={adminVideoRef} 
@@ -669,7 +685,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                 />
              </div>
 
-             {/* 3. LOCAL CAMERA (PiP - Always floating on bottom right) */}
+             {/* 3. LOCAL CAMERA (PiP) */}
              {callStatus === 'connected' && !cameraOffEndTime && (
                  <div className="absolute bottom-4 right-4 w-48 aspect-video rounded-lg overflow-hidden border-2 border-slate-600 shadow-2xl z-30 bg-black">
                      <video 
