@@ -33,7 +33,6 @@ export interface CameraConfig {
   type: 'mjpeg' | 'snapshot' | 'iframe';
   url: string;
   refreshInterval?: number; // For snapshot mode (ms)
-  isRelay?: boolean; // New: If true, fetch via Field device
 }
 
 export interface Site {

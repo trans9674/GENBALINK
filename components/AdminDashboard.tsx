@@ -23,14 +23,11 @@ interface AdminDashboardProps {
   userName: string;
   userRole: UserRole;
   onMarkRead: (id: string) => void;
-  relayImages?: Record<string, string>; // { cameraId: base64 }
-  onTriggerRelay?: (config: CameraConfig) => void;
-  relayErrors?: Record<string, string>; // { cameraId: errorMessage }
-  onDeleteMessage?: (id: string) => void; // New prop
-  unreadSites?: string[]; // New prop: List of site IDs with unread messages
-  isFieldCameraOff?: boolean; // New prop for camera status
-  onBroadcastMessage?: (targetSiteIds: string[], text: string, isNotice: boolean) => void; // New prop
-  onSetRemoteVolume?: (volume: number) => void; // New prop for remote volume control
+  onDeleteMessage?: (id: string) => void; 
+  unreadSites?: string[]; 
+  isFieldCameraOff?: boolean; 
+  onBroadcastMessage?: (targetSiteIds: string[], text: string, isNotice: boolean) => void; 
+  onSetRemoteVolume?: (volume: number) => void; 
 }
 
 // Annotation types
@@ -52,44 +49,27 @@ interface Shape {
 const SurveillanceCamera: React.FC<{ 
     config: CameraConfig; 
     onDelete: () => void; 
-    relayImage?: string; 
-    relayError?: string;
-    onTriggerRelay?: (c: CameraConfig) => void;
-}> = ({ config, onDelete, relayImage, relayError, onTriggerRelay }) => {
+}> = ({ config, onDelete }) => {
   const [timestamp, setTimestamp] = useState(Date.now());
 
   useEffect(() => {
     // Regular refresh for standard cameras
-    if (!config.isRelay && config.type === 'snapshot' && config.refreshInterval) {
+    if (config.type === 'snapshot' && config.refreshInterval) {
       const interval = setInterval(() => {
         setTimestamp(Date.now());
       }, config.refreshInterval);
       return () => clearInterval(interval);
     }
-    // Relay Trigger Interval
-    if (config.isRelay && config.refreshInterval && onTriggerRelay) {
-        const interval = setInterval(() => {
-            onTriggerRelay(config);
-        }, config.refreshInterval);
-        // Trigger immediately on mount
-        onTriggerRelay(config);
-        return () => clearInterval(interval);
-    }
-  }, [config, onTriggerRelay]);
+  }, [config]);
 
   // Determine Source URL
-  let srcUrl = '';
-  if (config.isRelay) {
-      srcUrl = relayImage || ''; 
-  } else {
-      srcUrl = config.type === 'iframe' 
-        ? config.url 
-        : `${config.url}${config.url.includes('?') ? '&' : '?'}t=${timestamp}`;
-  }
+  const srcUrl = config.type === 'iframe' 
+    ? config.url 
+    : `${config.url}${config.url.includes('?') ? '&' : '?'}t=${timestamp}`;
 
   return (
     <div className="relative w-full h-full bg-black group overflow-hidden">
-      {config.type === 'iframe' && !config.isRelay ? (
+      {config.type === 'iframe' ? (
         <iframe 
           src={srcUrl} 
           className="w-full h-full border-0 pointer-events-none" 
@@ -107,50 +87,17 @@ const SurveillanceCamera: React.FC<{
                     }}
                 />
             ) : (
-                <div className="text-center px-4 w-full">
-                    {relayError ? (
-                        <div className="text-red-400 bg-red-900/20 p-2 rounded border border-red-900/50">
-                             <div className="text-2xl mb-2">⚠️</div>
-                             <div className="text-xs font-bold break-all">{relayError}</div>
-                             <div className="text-[9px] mt-1 text-slate-400 leading-tight text-left">
-                                考えられる原因:<br/>
-                                ・URLが間違っている(Reolinkは認証必須)<br/>
-                                ・URLがストリーム形式(.mjpg)<br/>
-                                ・カメラがCORSヘッダー非対応<br/>
-                                ・Mixed Content (HTTPS→HTTP)
-                             </div>
-                        </div>
-                    ) : (
-                        config.isRelay ? (
-                            <>
-                                <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
-                                <span className="text-[10px] text-slate-500">Connecting via Relay...</span>
-                            </>
-                        ) : (
-                             <div className="flex flex-col items-center justify-center text-slate-500">
-                                <div className="animate-pulse w-8 h-8 bg-slate-800 rounded-full mb-2"></div>
-                                <span className="text-[10px]">Connecting...</span>
-                                <span className="text-[9px] mt-1 text-slate-600">Admin端末から直接アクセス中</span>
-                             </div>
-                        )
-                    )}
+                <div className="text-center px-4 w-full text-slate-500">
+                    <span className="text-xs">No Signal</span>
                 </div>
             )}
         </div>
       )}
       
-      {/* Error / Placeholder Fallback for IMG (if failed) */}
-      {!srcUrl && !config.isRelay && (
-        <div className="absolute inset-0 flex items-center justify-center -z-10 bg-slate-800">
-             <span className="text-xs text-slate-500">No Signal</span>
-        </div>
-      )}
-
       {/* Overlay */}
       <div className="absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-start opacity-0 group-hover:opacity-100 transition-opacity z-10">
         <div className="flex flex-col">
             <span className="text-xs font-bold text-white bg-blue-600/80 px-1.5 py-0.5 rounded shadow">{config.name}</span>
-            {config.isRelay && <span className="text-[9px] text-yellow-300 mt-0.5">iPad Relay Mode</span>}
         </div>
         <button 
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
@@ -160,12 +107,96 @@ const SurveillanceCamera: React.FC<{
         </button>
       </div>
       <div className="absolute bottom-2 right-2 flex items-center gap-1 opacity-70 z-10">
-         <div className={`w-2 h-2 rounded-full animate-pulse ${config.isRelay ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
+         <div className="w-2 h-2 rounded-full animate-pulse bg-green-500"></div>
          <span className="text-[10px] text-white shadow-black drop-shadow-md">LIVE</span>
       </div>
     </div>
   );
 };
+
+// --- System Topology Diagram Component ---
+const SystemDiagram = () => (
+  <div className="w-full bg-slate-950/50 rounded-xl p-4 border border-slate-700 mt-4 flex flex-col items-center">
+    <div className="w-full flex justify-between items-center mb-2 px-2 border-b border-slate-800 pb-2">
+         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">System Topology</span>
+         <span className="text-[10px] text-blue-400 font-bold">接続イメージ図</span>
+    </div>
+    <svg viewBox="0 0 420 160" className="w-full h-auto text-slate-300 select-none">
+      <defs>
+        <marker id="arrowhead" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
+          <polygon points="0 0, 6 2, 0 4" fill="#64748b" />
+        </marker>
+        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+           <feGaussianBlur stdDeviation="2" result="blur" />
+           <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+      </defs>
+
+      {/* --- Admin Side (Left) --- */}
+      <g transform="translate(40, 60)">
+         <rect x="-20" y="-15" width="40" height="30" rx="4" fill="#3b82f6" opacity="0.9" />
+         <path d="M-20 15 L20 15 L25 25 L-25 25 Z" fill="#3b82f6" opacity="0.6" />
+         <text x="0" y="40" fontSize="10" textAnchor="middle" fill="#93c5fd" fontWeight="bold">管理者PC</text>
+      </g>
+
+      {/* Connection Line: Admin -> Cloud */}
+      <line x1="70" y1="75" x2="130" y2="75" stroke="#64748b" strokeWidth="2" strokeDasharray="4 2" markerEnd="url(#arrowhead)" />
+
+      {/* --- Cloud (Center) --- */}
+      <g transform="translate(160, 75)">
+        <path d="M-25 0 Q-25 -15 -10 -15 Q0 -25 15 -15 Q30 -25 40 -15 Q55 -15 55 0 Q65 10 55 20 Q55 35 40 35 Q30 45 15 35 Q0 45 -10 35 Q-25 35 -25 20 Q-35 10 -25 0" fill="#475569" transform="translate(-15, -10) scale(0.8)" />
+        <text x="0" y="5" fontSize="9" textAnchor="middle" fill="white" fontWeight="bold">Internet</text>
+        <text x="0" y="35" fontSize="8" textAnchor="middle" fill="#94a3b8">GenbaLink Cloud</text>
+      </g>
+
+      {/* Connection Line: Cloud -> Router */}
+      <line x1="190" y1="75" x2="250" y2="75" stroke="#64748b" strokeWidth="2" strokeDasharray="4 2" markerEnd="url(#arrowhead)" />
+
+      {/* --- Site Area (Right Container) --- */}
+      <rect x="250" y="10" width="160" height="140" rx="8" fill="none" stroke="#eab308" strokeWidth="1" strokeDasharray="4 4" opacity="0.3" />
+      <text x="260" y="25" fontSize="10" fill="#eab308" fontWeight="bold" opacity="0.8">現場 (LAN)</text>
+
+      {/* Router */}
+      <g transform="translate(290, 75)">
+         <rect x="-15" y="-20" width="30" height="40" rx="4" fill="#eab308" opacity="0.9" />
+         <circle cx="0" cy="-10" r="2" fill="white" />
+         <circle cx="0" cy="0" r="2" fill="white" />
+         <circle cx="0" cy="10" r="2" fill="white" />
+         
+         {/* Wifi Waves Right */}
+         <path d="M20 -10 A 15 15 0 0 1 20 10" fill="none" stroke="#eab308" strokeWidth="2" strokeLinecap="round" opacity="0.8" />
+         <path d="M25 -15 A 25 25 0 0 1 25 15" fill="none" stroke="#eab308" strokeWidth="2" strokeLinecap="round" opacity="0.5" />
+         
+         <text x="0" y="32" fontSize="9" textAnchor="middle" fill="#fde047" fontWeight="bold">WiFi</text>
+         <text x="0" y="42" fontSize="8" textAnchor="middle" fill="#fde047" fontWeight="bold">ルーター</text>
+      </g>
+
+      {/* iPad */}
+      <g transform="translate(370, 45)">
+         <rect x="-15" y="-20" width="30" height="40" rx="2" fill="#ef4444" opacity="0.9" />
+         <rect x="-12" y="-17" width="24" height="34" rx="1" fill="#1e293b" />
+         <text x="0" y="30" fontSize="9" textAnchor="middle" fill="#fca5a5" fontWeight="bold">iPad</text>
+      </g>
+      {/* WiFi Connection Router -> iPad */}
+      <path d="M315 65 Q335 65 350 50" fill="none" stroke="#eab308" strokeWidth="1.5" strokeDasharray="2 2" opacity="0.6" />
+
+      {/* Camera */}
+      <g transform="translate(370, 115)">
+         <rect x="-15" y="-10" width="30" height="20" rx="2" fill="#22c55e" opacity="0.9" />
+         <circle cx="0" cy="0" r="6" fill="#0f172a" />
+         <circle cx="0" cy="0" r="3" fill="#22c55e" />
+         <text x="0" y="22" fontSize="9" textAnchor="middle" fill="#86efac" fontWeight="bold">カメラ</text>
+      </g>
+      {/* WiFi Connection Router -> Camera */}
+      <path d="M315 85 Q335 85 350 110" fill="none" stroke="#eab308" strokeWidth="1.5" strokeDasharray="2 2" opacity="0.6" />
+
+    </svg>
+    <div className="text-[9px] text-slate-500 mt-2 px-4 text-center">
+        ※ 全ての機器が同じWiFiルーターに接続されている必要があります。<br/>
+        ※ GenbaLinkはIPアドレス(ローカル)経由でカメラ映像を取得します。
+    </div>
+  </div>
+);
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
     siteId,
@@ -187,9 +218,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     userName,
     userRole,
     onMarkRead,
-    relayImages,
-    onTriggerRelay,
-    relayErrors,
     onDeleteMessage,
     unreadSites = [],
     isFieldCameraOff = false,
@@ -215,9 +243,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // --- External Cameras State (Per Site) ---
   const [cameras, setCameras] = useState<CameraConfig[]>([]);
   const [showCameraModal, setShowCameraModal] = useState(false);
-  const [newCamera, setNewCamera] = useState<Partial<CameraConfig>>({ type: 'mjpeg', refreshInterval: 1000, isRelay: false });
+  const [newCamera, setNewCamera] = useState<Partial<CameraConfig>>({ type: 'snapshot', refreshInterval: 1000 });
   const [showAddSiteModal, setShowAddSiteModal] = useState(false);
   const [newSiteForm, setNewSiteForm] = useState({ id: '', name: '' });
+
+  // Reolink Wizard State
+  const [reolinkForm, setReolinkForm] = useState({ ip: '192.168.', username: 'admin', password: '' });
 
   // --- Broadcast / Multiple Selection State ---
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -264,7 +295,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 type: c.type,
                 url: c.url,
                 refresh_interval: c.refresh_interval,
-                isRelay: c.is_relay,
             }));
             setCameras(mappedCameras);
         }
@@ -317,37 +347,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setIsScreenSharing(false);
     setShapes([]); 
     onStreamReady(null); 
-  };
-
-  // --- Toggle Camera (Unused but kept for logic consistency) ---
-  const toggleCamera = async () => {
-    const wasScreenSharing = isScreenSharing;
-
-    if (wasScreenSharing) {
-        if (displayStreamRef.current) {
-            displayStreamRef.current.getTracks().forEach(t => t.stop());
-            displayStreamRef.current = null;
-        }
-        if (screenVideoRef.current) {
-            screenVideoRef.current.srcObject = null;
-        }
-        setIsScreenSharing(false);
-        setShapes([]);
-    } else if (localStream) {
-        onStreamReady(null);
-        return;
-    }
-
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        onStreamReady(stream);
-    } catch (e) {
-        console.error("Camera Error", e);
-        alert("カメラへのアクセスを許可してください");
-        if (wasScreenSharing) {
-            onStreamReady(null);
-        }
-    }
   };
 
   // --- Start Screen Share ---
@@ -549,25 +548,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // --- Camera Management (Supabase) ---
   const handleAddCamera = async () => {
-    if (newCamera.name && newCamera.url && siteId) {
-      const cameraPayload = {
-          id: Date.now().toString(),
-          site_id: siteId,
-          name: newCamera.name,
-          type: newCamera.type,
-          url: newCamera.url,
-          refresh_interval: newCamera.refreshInterval || 1000,
-          is_relay: newCamera.isRelay || false
-      };
-      
-      const { error } = await supabase.from('cameras').insert(cameraPayload);
-      if (error) {
-          console.error("Failed to add camera", error);
-          alert("カメラの追加に失敗しました");
-      } else {
-          setNewCamera({ type: 'mjpeg', refreshInterval: 1000, name: '', url: '', isRelay: false });
-          setShowCameraModal(false);
-      }
+    if (!reolinkForm.ip || !reolinkForm.username || !reolinkForm.password || !newCamera.name) return;
+    
+    // Construct Reolink URL based on Standard HTTP API
+    const finalUrl = `http://${reolinkForm.ip}/cgi-bin/api.cgi?cmd=Snap&channel=0&user=${reolinkForm.username}&password=${reolinkForm.password}`;
+    const finalType = 'snapshot';
+    const finalInterval = 1000;
+
+    const cameraPayload = {
+        id: Date.now().toString(),
+        site_id: siteId,
+        name: newCamera.name,
+        type: finalType,
+        url: finalUrl,
+        refresh_interval: finalInterval,
+    };
+    
+    const { error } = await supabase.from('cameras').insert(cameraPayload);
+    if (error) {
+        console.error("Failed to add camera", error);
+        alert("カメラの追加に失敗しました");
+    } else {
+        setNewCamera({ type: 'snapshot', refreshInterval: 1000, name: '' });
+        setReolinkForm({ ip: '192.168.', username: 'admin', password: '' });
+        setShowCameraModal(false);
     }
   };
 
@@ -583,17 +587,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
          setShowAddSiteModal(false);
          setNewSiteForm({ id: '', name: '' });
      }
-  };
-
-  // Reolink Template Helper (Updated with User provided credentials)
-  const applyReolinkTemplate = () => {
-      setNewCamera(prev => ({
-          ...prev,
-          url: 'http://192.168.11.21/cgi-bin/api.cgi?cmd=Snap&channel=0&user=admin&password=genbalink01',
-          isRelay: false, // Changed: Disable relay to use direct Wifi connection
-          type: 'snapshot',
-          refreshInterval: 500
-      }));
   };
 
   // Helper to get site name
@@ -911,9 +904,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 <SurveillanceCamera 
                                     config={cameras[index]} 
                                     onDelete={() => handleDeleteCamera(cameras[index].id)} 
-                                    relayImage={relayImages ? relayImages[cameras[index].id] : undefined}
-                                    relayError={relayErrors ? relayErrors[cameras[index].id] : undefined}
-                                    onTriggerRelay={onTriggerRelay}
                                 />
                             ) : (
                                 <button 
@@ -994,81 +984,115 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {/* Add Camera Modal */}
         {showCameraModal && (
             <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
-                <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl">
-                    <h2 className="text-xl font-bold text-white mb-4">Liveカメラを追加 ({siteId})</h2>
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-xs font-bold text-slate-400 mb-1">カメラ名</label>
-                            <input type="text" value={newCamera.name || ''} onChange={e => setNewCamera({...newCamera, name: e.target.value})} placeholder="例: 現場入口 (Reolink)" className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none" />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-slate-400 mb-1">映像タイプ</label>
-                            <div className="flex gap-4 mb-2">
-                                <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="camType" checked={newCamera.type === 'mjpeg'} onChange={() => setNewCamera({...newCamera, type: 'mjpeg'})} className="accent-blue-500"/><span className="text-sm text-slate-200">MJPEGストリーム</span></label>
-                                <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="camType" checked={newCamera.type === 'snapshot'} onChange={() => setNewCamera({...newCamera, type: 'snapshot'})} className="accent-blue-500"/><span className="text-sm text-slate-200">定期スナップショット</span></label>
+                <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-4xl shadow-2xl flex flex-col md:flex-row overflow-hidden">
+                    
+                    {/* Left: Guide (Updated with Diagram) */}
+                    <div className="w-full md:w-1/2 bg-slate-800 p-6 border-r border-slate-700 overflow-y-auto custom-scrollbar">
+                        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-xs">!</span>
+                            設定手順 (重要)
+                        </h3>
+                        
+                        <div className="space-y-6 text-sm text-slate-300">
+                            <div className="p-3 bg-yellow-900/20 border border-yellow-500/30 rounded-lg text-yellow-200 text-xs mb-4">
+                                <strong>⚠️ GenbaLink単体ではWiFi接続設定はできません。</strong><br/>
+                                必ず「Reolink公式アプリ」で初期設定を完了させてから、下記の手順で登録してください。
                             </div>
-                            
-                            {/* Relay Checkbox */}
-                            <label className="flex items-center gap-2 cursor-pointer bg-slate-800 p-2 rounded border border-slate-700">
-                                <input 
-                                    type="checkbox" 
-                                    checked={newCamera.isRelay || false} 
-                                    onChange={(e) => setNewCamera({...newCamera, isRelay: e.target.checked})} 
-                                    className="w-4 h-4 accent-blue-500"
-                                />
+
+                            <div className="flex gap-3">
+                                <div className="flex-shrink-0 w-8 h-8 rounded bg-slate-700 flex items-center justify-center font-bold text-blue-400">1</div>
                                 <div>
-                                    <div className="text-sm font-bold text-white">現場iPadを経由して接続 (Relay)</div>
-                                    <div className="text-[10px] text-slate-400">ルーター設定が不要ですが、iPadが起動している必要があります</div>
+                                    <div className="font-bold text-white mb-1">公式アプリで設定 (必須)</div>
+                                    <p className="text-xs leading-relaxed">
+                                        スマホまたはPCの「Reolink Client」でカメラを追加し、WiFi接続を完了させてください。<br/>
+                                        <span className="text-slate-500">(QRコード読み取り/LAN検索などを使用)</span>
+                                    </p>
                                 </div>
-                            </label>
-                        </div>
-                        
-                        {/* URL INPUT SECTION */}
-                        <div>
-                            <div className="flex justify-between items-end mb-1">
-                                <label className="block text-xs font-bold text-slate-400">
-                                    {newCamera.isRelay ? 'Snapshot URL (JPEGのみ)' : 'URL (ローカルIP可)'}
-                                </label>
-                                <button 
-                                    onClick={applyReolinkTemplate}
-                                    className="text-[10px] bg-blue-900/50 hover:bg-blue-800 text-blue-300 px-2 py-0.5 rounded border border-blue-800 transition-colors"
-                                >
-                                    Reolink テンプレート
-                                </button>
                             </div>
-                            <input 
-                                type="text" 
-                                value={newCamera.url || ''} 
-                                onChange={e => setNewCamera({...newCamera, url: e.target.value})} 
-                                placeholder={newCamera.isRelay ? "http://192.168.1.100/api/snapshot.jpg" : "http://192.168.1.100/video.mjpg"} 
-                                className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none font-mono text-xs" 
-                            />
-                            {newCamera.isRelay ? (
-                                <div className="mt-1 space-y-1">
-                                    <div className="text-[10px] text-yellow-500">
-                                        ※ Relayモードでは動画ストリームURL(.mjpg)は使用できません。必ず静止画(Snapshot)のURLを入力してください。
-                                    </div>
-                                    <div className="text-[10px] text-blue-400">
-                                        ※ URL内の「user=admin」と「password=...」を実際のカメラ設定に合わせて変更してください。
-                                    </div>
+
+                            <div className="flex gap-3">
+                                <div className="flex-shrink-0 w-8 h-8 rounded bg-slate-700 flex items-center justify-center font-bold text-blue-400">2</div>
+                                <div>
+                                    <div className="font-bold text-white mb-1">IPアドレスを確認</div>
+                                    <p className="text-xs leading-relaxed">
+                                        公式アプリの「デバイス設定 ＞ ネットワーク情報」から、カメラに割り当てられた<strong>IPアドレス</strong>を確認します。
+                                    </p>
                                 </div>
-                            ) : (
-                                <div className="mt-1 text-[10px] text-slate-400">
-                                    ・カメラは現場に設置したルーターでWifi接続する。PCと同じネットワーク(WiFi)ではない。
-                                </div>
-                            )}
-                        </div>
-                        
-                        {(newCamera.type === 'snapshot' || newCamera.isRelay) && (
-                            <div>
-                                <label className="block text-xs font-bold text-slate-400 mb-1">更新間隔 (ms)</label>
-                                <input type="number" value={newCamera.refreshInterval || 1000} onChange={e => setNewCamera({...newCamera, refreshInterval: Number(e.target.value)})} className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none" />
                             </div>
-                        )}
+
+                            <div className="flex gap-3">
+                                <div className="flex-shrink-0 w-8 h-8 rounded bg-slate-700 flex items-center justify-center font-bold text-blue-400">3</div>
+                                <div>
+                                    <div className="font-bold text-white mb-1">GenbaLinkに登録</div>
+                                    <p className="text-xs leading-relaxed">
+                                        右側のフォームに、IPアドレスと<strong>公式アプリで設定したユーザー名・パスワード</strong>を入力してください。<br/>
+                                        <span className="text-red-400">※UID(個体番号)での登録はできません。</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                             {/* --- SYSTEM DIAGRAM HERE --- */}
+                             <SystemDiagram />
+                        </div>
                     </div>
-                    <div className="flex justify-end gap-3 mt-8">
-                        <button onClick={() => setShowCameraModal(false)} className="px-4 py-2 text-slate-400 hover:text-white font-bold">キャンセル</button>
-                        <button onClick={handleAddCamera} disabled={!newCamera.name || !newCamera.url} className={`px-6 py-2 rounded font-bold text-white ${!newCamera.name || !newCamera.url ? 'bg-slate-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'}`}>追加する</button>
+
+                    {/* Right: Input Form */}
+                    <div className="w-full md:w-1/2 p-6 flex flex-col justify-center">
+                        <h2 className="text-xl font-bold text-white mb-6">カメラ情報の登録</h2>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 mb-1">カメラ名</label>
+                                <input type="text" value={newCamera.name || ''} onChange={e => setNewCamera({...newCamera, name: e.target.value})} placeholder="例: 現場入口" className="w-full bg-slate-950 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none" />
+                            </div>
+
+                            <div className="p-4 bg-blue-900/10 rounded-lg border border-blue-900/30 space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-400 mb-1">IPアドレス (ローカルIP)</label>
+                                    <input 
+                                        type="text" 
+                                        value={reolinkForm.ip} 
+                                        onChange={e => setReolinkForm({...reolinkForm, ip: e.target.value})} 
+                                        placeholder="例: 192.168.1.100" 
+                                        className="w-full bg-slate-950 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none font-mono text-sm" 
+                                    />
+                                    <div className="text-[10px] text-slate-500 mt-1">※UIDではありません。IPアドレスを入力してください。</div>
+                                </div>
+                                <div className="flex gap-4">
+                                    <div className="flex-1">
+                                        <label className="block text-xs font-bold text-slate-400 mb-1">ユーザー名</label>
+                                        <input 
+                                            type="text" 
+                                            value={reolinkForm.username} 
+                                            onChange={e => setReolinkForm({...reolinkForm, username: e.target.value})} 
+                                            className="w-full bg-slate-950 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none" 
+                                        />
+                                        <div className="text-[10px] text-slate-500 mt-1">初期設定は 'admin' です</div>
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="block text-xs font-bold text-slate-400 mb-1">パスワード</label>
+                                        <input 
+                                            type="password" 
+                                            value={reolinkForm.password} 
+                                            onChange={e => setReolinkForm({...reolinkForm, password: e.target.value})} 
+                                            className="w-full bg-slate-950 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none" 
+                                        />
+                                        <div className="text-[10px] text-slate-500 mt-1">※公式アプリの初期設定で作成したパスワード</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-8">
+                            <button onClick={() => setShowCameraModal(false)} className="px-4 py-2 text-slate-400 hover:text-white font-bold">キャンセル</button>
+                            <button 
+                                onClick={handleAddCamera} 
+                                disabled={!newCamera.name || !reolinkForm.ip || !reolinkForm.password} 
+                                className={`px-6 py-2 rounded font-bold text-white ${(!newCamera.name || !reolinkForm.ip || !reolinkForm.password) ? 'bg-slate-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'}`}
+                            >
+                                追加する
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

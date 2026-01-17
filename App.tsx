@@ -14,10 +14,6 @@ const App: React.FC = () => {
   // Chat Messages Management (Synced via Supabase)
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
-  // Relay Images State (Admin Side) - Map camera ID to base64 image string
-  const [relayImages, setRelayImages] = useState<Record<string, string>>({});
-  const [relayErrors, setRelayErrors] = useState<Record<string, string>>({});
-
   const [incomingAlert, setIncomingAlert] = useState(false);
   const [isFieldCameraOff, setIsFieldCameraOff] = useState(false); // New state for Camera Off message
   const [fieldAlertVolume, setFieldAlertVolume] = useState<number>(1.0); // State for Alert Volume on Field device
@@ -193,9 +189,8 @@ const App: React.FC = () => {
   }, [siteId]);
 
 
-  // --- メッセージ受信処理 (PeerJS: Signaling & Relay Only) ---
+  // --- メッセージ受信処理 (PeerJS: Signaling Only) ---
   const handleDataReceived = useCallback(async (data: any) => {
-    // console.log("Data received:", data.type); // Reduce log noise for relay
     const { type, payload } = data;
     
     // NOTE: 'CHAT' and 'CHAT_DELETE' are now handled by Supabase Realtime!
@@ -220,75 +215,6 @@ const App: React.FC = () => {
     } else if (type === 'SET_VOLUME') {
         // [Field Side] Received volume setting from Admin
         setFieldAlertVolume(payload.volume);
-    } else if (type === 'RELAY_REQUEST') {
-        // [Field Side] Admin requested a camera image relay
-        // Payload: { cameraId, url }
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
-
-            // Fetch with CORS mode. 
-            const response = await fetch(payload.url, { 
-                mode: 'cors',
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-
-            if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-            
-            const contentType = response.headers.get('content-type');
-            if (contentType && contentType.includes('multipart/x-mixed-replace')) {
-                throw new Error("Stream URL detected. Use Snapshot URL.");
-            }
-
-            const blob = await response.blob();
-            
-            // Convert to Base64
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const base64data = reader.result as string;
-                if (connRef.current && connRef.current.open) {
-                    connRef.current.send({
-                        type: 'RELAY_RESPONSE',
-                        payload: {
-                            cameraId: payload.cameraId,
-                            image: base64data
-                        }
-                    });
-                }
-            };
-            reader.readAsDataURL(blob);
-        } catch (error: any) {
-            console.error("Relay Fetch Error:", error);
-            // Send back error to admin
-            if (connRef.current && connRef.current.open) {
-                connRef.current.send({
-                    type: 'RELAY_ERROR',
-                    payload: {
-                        cameraId: payload.cameraId,
-                        error: error.name === 'AbortError' ? 'Timeout (Stream URL?)' : error.message || 'Fetch Failed'
-                    }
-                });
-            }
-        }
-    } else if (type === 'RELAY_RESPONSE') {
-        // [Admin Side] Received relayed image from Field
-        setRelayImages(prev => ({
-            ...prev,
-            [payload.cameraId]: payload.image
-        }));
-        // Clear error if success
-        setRelayErrors(prev => {
-            const newState = { ...prev };
-            delete newState[payload.cameraId];
-            return newState;
-        });
-    } else if (type === 'RELAY_ERROR') {
-        // [Admin Side] Received error from Field
-        setRelayErrors(prev => ({
-            ...prev,
-            [payload.cameraId]: payload.error
-        }));
     }
   }, []);
 
@@ -372,8 +298,6 @@ const App: React.FC = () => {
         connRef.current = null;
         setRemoteStream(null);
         setCallStatus('idle');
-        setRelayImages({}); // Clear images on disconnect
-        setRelayErrors({});
         setIsFieldCameraOff(false);
     }
 
@@ -503,21 +427,6 @@ const App: React.FC = () => {
       setCallStatus('idle');
   };
 
-  // --- Relay Trigger Logic (Admin Only) ---
-  const triggerRelayRequest = (camera: CameraConfig) => {
-      if (currentRole === UserRole.ADMIN && connRef.current && connRef.current.open && camera.isRelay) {
-          // Add a timestamp to prevent caching on the Field device side
-          const urlWithTs = `${camera.url}${camera.url.includes('?') ? '&' : '?'}t=${Date.now()}`;
-          connRef.current.send({
-              type: 'RELAY_REQUEST',
-              payload: {
-                  cameraId: camera.id,
-                  url: urlWithTs
-              }
-          });
-      }
-  };
-
   // --- Field Camera Status Handling ---
   const handleSetCameraStatus = (isOff: boolean) => {
       if (connRef.current && connRef.current.open) {
@@ -545,8 +454,6 @@ const App: React.FC = () => {
 
   const handleSwitchSite = (newSiteId: string) => {
       setSiteId(newSiteId);
-      setRelayImages({}); 
-      setRelayErrors({});
       setIsFieldCameraOff(false); // Reset when switching sites
       setFieldAlertVolume(1.0); // Reset volume expectation
   };
@@ -663,9 +570,6 @@ const App: React.FC = () => {
         userName={userName}
         userRole={currentRole}
         onMarkRead={handleMarkRead}
-        relayImages={relayImages} // Pass relay images
-        relayErrors={relayErrors} // Pass relay errors
-        onTriggerRelay={triggerRelayRequest} // Pass relay trigger
         onDeleteMessage={handleDeleteMessage}
         unreadSites={Array.from(unreadSites)} // Pass unread sites as array
         isFieldCameraOff={isFieldCameraOff} // Pass Camera Off status
