@@ -418,19 +418,19 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
 
   return (
     <div className="h-screen flex flex-col bg-slate-950 relative">
-      {/* Urgent Notice Modal */}
+      {/* Urgent Notice Modal - Updated to Yellow Theme */}
       {urgentNotice && (
-          <div className="absolute inset-0 z-[100] bg-red-950/90 flex flex-col items-center justify-center p-8 backdrop-blur animate-in fade-in zoom-in duration-300">
-              <div className="w-full max-w-2xl bg-slate-900 border-2 border-red-500 rounded-3xl p-8 shadow-2xl flex flex-col items-center text-center relative overflow-hidden">
+          <div className="absolute inset-0 z-[100] bg-yellow-950/90 flex flex-col items-center justify-center p-8 backdrop-blur animate-in fade-in zoom-in duration-300">
+              <div className="w-full max-w-2xl bg-slate-900 border-2 border-yellow-500 rounded-3xl p-8 shadow-2xl flex flex-col items-center text-center relative overflow-hidden">
                    {/* Background Pulse Effect */}
-                   <div className="absolute top-0 left-0 w-full h-2 bg-red-500 animate-pulse"></div>
+                   <div className="absolute top-0 left-0 w-full h-2 bg-yellow-500 animate-pulse"></div>
                    
-                   <div className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-red-900/50 animate-bounce">
-                        <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                   <div className="w-20 h-20 bg-yellow-600 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-yellow-900/50 animate-bounce">
+                        <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h1m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                    </div>
 
-                   <h2 className="text-3xl font-black text-red-500 tracking-widest mb-2">共通連絡事項</h2>
-                   <div className="w-16 h-1 bg-red-500/50 rounded-full mb-6"></div>
+                   <h2 className="text-3xl font-black text-yellow-500 tracking-widest mb-2">共通連絡事項</h2>
+                   <div className="w-16 h-1 bg-yellow-500/50 rounded-full mb-6"></div>
 
                    <p className="text-2xl md:text-4xl font-bold text-white leading-relaxed mb-8 whitespace-pre-wrap">
                        {urgentNotice}

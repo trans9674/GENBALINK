@@ -686,7 +686,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
                 }`}
              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                 {isScreenSharing ? '共有停止' : '画面共有'}
              </button>
 
@@ -960,12 +960,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         onChange={(e) => setBroadcastText(e.target.value)}
                     />
 
-                    <label className="flex items-start gap-3 mt-4 p-3 bg-red-900/20 border border-red-900/50 rounded-lg cursor-pointer hover:bg-red-900/30 transition-colors">
+                    {/* Updated to Yellow (Caution Color) */}
+                    <label className="flex items-start gap-3 mt-4 p-3 bg-yellow-900/20 border border-yellow-900/50 rounded-lg cursor-pointer hover:bg-yellow-900/30 transition-colors">
                         <input 
                             type="checkbox" 
                             checked={isUrgentNotice} 
                             onChange={(e) => setIsUrgentNotice(e.target.checked)}
-                            className="w-5 h-5 mt-0.5 accent-red-500"
+                            className="w-5 h-5 mt-0.5 accent-yellow-500"
                         />
                         <div>
                             <div className="text-white font-bold text-sm">【共通連絡事項】として強調表示する</div>
