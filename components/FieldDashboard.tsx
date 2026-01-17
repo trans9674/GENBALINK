@@ -242,66 +242,69 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
     setAttendanceStep('result');
   };
 
-  // --- Render Call Widget ---
+  // --- Render Call Widget (Larger Buttons for Sidebar) ---
   const renderCallWidget = () => {
+      const buttonBaseClass = "w-44 h-44 rounded-3xl flex flex-col items-center justify-center gap-3 shadow-xl transition-all active:scale-95 border-4";
+      const iconClass = "w-20 h-20";
+      const textClass = "font-bold text-2xl";
+
       switch (callStatus) {
           case 'incoming':
               return (
-                  <div className="flex flex-col items-center gap-2 animate-bounce">
-                      <div className="text-white font-bold bg-red-600 px-3 py-1 rounded-full text-sm mb-1 shadow-lg">着信中...</div>
-                      <div className="flex gap-4">
-                          <button 
-                              onClick={onAcceptCall}
-                              className="w-16 h-16 bg-green-500 hover:bg-green-400 rounded-full flex items-center justify-center shadow-lg border-2 border-white"
-                          >
-                              <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
-                          </button>
-                          <button 
-                              onClick={onEndCall}
-                              className="w-16 h-16 bg-red-600 hover:bg-red-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white"
-                          >
-                               <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                          </button>
-                      </div>
+                  <div className="flex flex-col gap-4 animate-bounce w-full items-center">
+                      <div className="text-white font-bold bg-red-600 px-4 py-2 rounded-full text-lg mb-2 shadow-lg w-full text-center">着信中...</div>
+                      <button 
+                          onClick={onAcceptCall}
+                          className={`${buttonBaseClass} bg-green-600 hover:bg-green-500 border-white text-white`}
+                      >
+                          <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                          <span className={textClass}>応答</span>
+                      </button>
+                      <button 
+                          onClick={onEndCall}
+                          className="w-full bg-red-600 hover:bg-red-500 py-3 rounded-xl text-white font-bold text-lg border-2 border-white/20"
+                      >
+                          拒否
+                      </button>
                   </div>
               );
           case 'outgoing':
                return (
-                  <div className="flex flex-col items-center gap-2">
-                       <div className="text-white font-bold animate-pulse text-sm mb-1">呼び出し中...</div>
+                  <div className="flex flex-col items-center gap-2 w-full">
+                       <div className="text-white font-bold animate-pulse text-lg mb-1">呼び出し中...</div>
                        <button 
                           onClick={onEndCall}
-                          className="w-16 h-16 bg-red-600 hover:bg-red-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white"
+                          className={`${buttonBaseClass} bg-red-600 hover:bg-red-500 border-white text-white`}
                        >
-                           <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                           <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                           <span className={textClass}>取消</span>
                        </button>
                   </div>
                );
           case 'connected':
                return (
-                  <div className="flex flex-col items-center gap-2">
-                       <div className="text-green-400 font-bold text-sm mb-1 border border-green-500/50 bg-green-900/50 px-2 rounded">通話中</div>
+                  <div className="flex flex-col items-center gap-2 w-full">
+                       <div className="text-green-400 font-bold text-lg mb-1 border border-green-500/50 bg-green-900/50 px-3 py-1 rounded">通話中</div>
                        <button 
                           onClick={onEndCall}
-                          className="w-16 h-16 bg-red-600 hover:bg-red-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white animate-pulse"
+                          className={`${buttonBaseClass} bg-red-600 hover:bg-red-500 border-white text-white animate-pulse`}
                        >
-                           <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.516l2.257-1.13a1 1 0 00.502-1.21L8.228 3.683A1 1 0 007.28 3H5z" /></svg>
+                           <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.516l2.257-1.13a1 1 0 00.502-1.21L8.228 3.683A1 1 0 007.28 3H5z" /></svg>
+                           <span className={textClass}>終了</span>
                        </button>
                   </div>
                );
           default: // idle
                return (
-                   <div className="flex flex-col items-center gap-2">
-                       <div className="text-xs text-slate-400 mb-1">管理者と会話</div>
-                       <button 
-                           onClick={onStartCall}
-                           className="w-16 h-16 bg-blue-600 hover:bg-blue-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white/20 transition-transform active:scale-95"
-                       >
-                            <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                            </svg>
-                       </button>
-                   </div>
+                   <button 
+                       onClick={onStartCall}
+                       className={`${buttonBaseClass} bg-blue-600 hover:bg-blue-500 border-blue-400 text-white`}
+                   >
+                        <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                        </svg>
+                        <span className={textClass}>管理者と会話</span>
+                   </button>
                );
       }
   };
@@ -324,9 +327,12 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
     );
   }
 
+  // Conditions to hide chat
+  const shouldHideChat = callStatus === 'connected' || !!adminStream;
+
   return (
     <div className="h-screen flex flex-col bg-slate-950 relative">
-      {/* Attendance Modal */}
+      {/* Attendance Modal (Unchanged) */}
       {showAttendanceModal && (
         <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-6 shadow-2xl relative">
@@ -430,14 +436,13 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
         </div>
       )}
 
-      {/* Top Bar */}
-      <div className="h-16 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-6">
+      {/* Top Bar (Simplified for iPad) */}
+      <div className="h-16 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-6 shrink-0 z-50">
         <div className="flex items-center gap-4">
             <h1 className="text-xl font-bold text-white tracking-wider">GENBA<span className="text-orange-500">LINK</span></h1>
             <span className="px-3 py-1 bg-blue-900 text-blue-200 text-xs rounded-full border border-blue-700">{siteId}</span>
         </div>
         <div className="flex items-center gap-2 md:gap-4">
-            {/* Connection Status & Reconnect Button */}
             <button 
                 onClick={onReconnect}
                 className={`hidden md:flex items-center gap-2 px-3 py-1 rounded border text-xs font-bold transition-all ${
@@ -462,33 +467,37 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Main Layout: Sidebar - Video - Chat */}
-        
-        {/* Sidebar Tabs (Reduced to just Attendance as Chat/Live are always visible) */}
-        <div className="w-20 bg-slate-900 border-r border-slate-800 flex flex-col pt-4 items-center gap-4">
+        {/* SIDEBAR: Controls (Expanded width) */}
+        <div className="w-56 bg-slate-900 border-r border-slate-800 flex flex-col pt-6 items-center gap-8 shrink-0 z-40 overflow-y-auto pb-4">
+             {/* 1. Entry/Exit Button (Enlarged) */}
              <button 
                 onClick={() => {
                     setShowAttendanceModal(true);
                     setAttendanceStep('menu');
                     resetInactivityTimer();
                 }}
-                className={`w-16 h-16 rounded-xl flex flex-col items-center justify-center gap-1 ${showAttendanceModal ? 'bg-slate-800 text-blue-400' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                className={`w-44 h-44 rounded-3xl flex flex-col items-center justify-center gap-3 border-4 transition-transform active:scale-95 shadow-xl ${
+                    showAttendanceModal 
+                    ? 'bg-slate-800 border-blue-500 text-blue-400' 
+                    : 'bg-slate-800 border-slate-600 text-slate-300 hover:text-white hover:border-slate-500'
+                }`}
             >
-                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-20 h-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
                 </svg>
-                <span className="text-[10px] font-bold">入退場</span>
+                <span className="text-2xl font-bold">入退場</span>
             </button>
+
+            {/* 2. Call Widget (Moved here) */}
+            {renderCallWidget()}
         </div>
 
-        {/* Main Content Area (Split Screen) */}
-        <div className="flex-1 flex relative bg-black">
+        {/* Main Content Area */}
+        <div className="flex-1 flex relative bg-black min-w-0">
              {/* Video Area */}
-             <div className="flex-1 relative bg-black flex items-center justify-center">
+             <div className={`relative bg-black flex items-center justify-center transition-all duration-300 ${shouldHideChat ? 'flex-1' : 'w-[50%] md:w-[45%]'}`}>
                 
                 {/* 1. Admin Video (Screen Share) - MAIN BACKGROUND LAYER */}
-                {/* "Fit Width" implies maximize size. object-contain ensures no crop, w-full ensures it stretches horizontally. */}
-                {/* z-0 puts it at the back. */}
                 <video 
                     ref={adminVideoRef} 
                     autoPlay 
@@ -499,7 +508,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                     style={{ objectFit: 'contain' }}
                 />
 
-                {/* 2. Local Camera (Field) - Only visible when connected/streaming */}
+                {/* 2. Local Camera (Field) */}
                 {callStatus === 'connected' && (
                     <div 
                         className={`transition-all duration-500 ease-in-out z-10 ${
@@ -523,7 +532,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                     </div>
                 )}
                 
-                {/* Visual Alert Overlay (Calling) */}
+                {/* Visual Alert Overlay (Calling) - Keeping this for huge visual cue */}
                 {(incomingAlert || callStatus === 'incoming') && (
                     <div className="absolute inset-0 z-50 pointer-events-none border-[12px] border-blue-500/80 animate-pulse flex items-center justify-center bg-blue-900/20">
                         <div className="bg-blue-600 text-white font-black text-4xl md:text-5xl px-8 py-8 rounded-2xl shadow-2xl animate-bounce tracking-widest border-4 border-white flex flex-col items-center gap-4">
@@ -533,7 +542,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                     </div>
                 )}
                 
-                {/* Connection Status Overlay (Mobile) */}
+                {/* Connection Status Overlay (Mobile/Partial) */}
                 {(!connectionStatus.includes('完了') && callStatus !== 'connected' && !adminStream) && (
                     <div className="absolute top-4 left-4 right-4 bg-yellow-900/80 text-yellow-100 p-2 rounded text-center text-sm backdrop-blur border border-yellow-700/50 z-20">
                         <p className="font-bold mb-1">未接続: 管理者端末を探しています...</p>
@@ -545,26 +554,23 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                         </button>
                     </div>
                 )}
-                
-                {/* Call Widget - Positioned at bottom center, above the PiP line */}
-                <div className="absolute bottom-8 left-8 right-8 flex justify-center items-end z-40 pointer-events-none">
-                    <div className="pointer-events-auto bg-black/60 backdrop-blur-md p-4 rounded-xl border border-white/10">
-                         {renderCallWidget()}
-                    </div>
-                </div>
              </div>
 
-             {/* Right Chat Sidebar (Always Visible) */}
-             <div className="w-96 border-l border-slate-800 bg-slate-900 flex flex-col">
-                 <ChatInterface 
-                    messages={messages} 
-                    onSendMessage={onSendMessage} 
-                    userName={userName}
-                    onMarkRead={onMarkRead}
-                    userRole={userRole}
-                    onDeleteMessage={onDeleteMessage} // Pass handler
-                 />
-             </div>
+             {/* Right Chat Sidebar (Expanded & Hideable) */}
+             {!shouldHideChat && (
+                 <div className="flex-1 border-l border-slate-800 bg-slate-900 flex flex-col min-w-0">
+                     <ChatInterface 
+                        messages={messages} 
+                        onSendMessage={onSendMessage} 
+                        userName={userName}
+                        onMarkRead={onMarkRead}
+                        userRole={userRole}
+                        onDeleteMessage={onDeleteMessage} 
+                        chatTitle={`${siteId} 現場チャット`}
+                        largeMode={true}
+                     />
+                 </div>
+             )}
         </div>
       </div>
     </div>

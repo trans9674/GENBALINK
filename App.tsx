@@ -22,6 +22,9 @@ const App: React.FC = () => {
   
   // Sites Management (For Admin)
   const [sites, setSites] = useState<Site[]>([]);
+
+  // Unread Sites Management (Set of Site IDs)
+  const [unreadSites, setUnreadSites] = useState<Set<string>>(new Set());
   
   // remoteStream: 相手の映像 (AdminにとってはFieldの映像、FieldにとってはAdminの映像)
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
@@ -60,6 +63,70 @@ const App: React.FC = () => {
     
     return () => { supabase.removeChannel(channel); };
   }, []);
+
+  // --- Helper: Check Unread Status for a Site ---
+  const checkSiteUnreadStatus = useCallback(async (targetSiteId: string) => {
+      const { count } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('site_id', targetSiteId)
+          .eq('is_read', false);
+      
+      setUnreadSites(prev => {
+          const next = new Set(prev);
+          if (count === 0) {
+              next.delete(targetSiteId);
+          } else {
+              next.add(targetSiteId);
+          }
+          return next;
+      });
+  }, []);
+
+  // --- Manage Unread Sites (Global Subscription for Admin) ---
+  useEffect(() => {
+    if (currentRole !== UserRole.ADMIN) return;
+
+    // 1. Initial Fetch of all sites with unread messages
+    const fetchUnread = async () => {
+        const { data } = await supabase
+            .from('messages')
+            .select('site_id')
+            .eq('is_read', false);
+        
+        if (data) {
+            const unreadSet = new Set(data.map(m => m.site_id));
+            setUnreadSites(unreadSet);
+        }
+    };
+    fetchUnread();
+
+    // 2. Subscribe to ALL messages to detect unread status changes globally
+    const channel = supabase.channel('global_unread_tracker')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+            const newMsg = payload.new;
+            // If message is unread and NOT from me (Admin), add to unread list
+            // Note: We check sender !== userName to avoid self-messages triggering notifications
+            if (newMsg.is_read === false && newMsg.sender !== userName) {
+                setUnreadSites(prev => new Set(prev).add(newMsg.site_id));
+            }
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, (payload) => {
+            // When a message is updated (e.g., marked read), re-check that site's status
+            const updatedMsg = payload.new;
+            checkSiteUnreadStatus(updatedMsg.site_id);
+        })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, (payload) => {
+             // When deleted, re-check (payload.old contains the ID, but we need site_id which might be in old record depending on replica identity, usually simpler to just check active site or reload)
+             // Supabase delete payload usually only has ID unless FULL replica identity.
+             // For simplicity, if we are viewing the site, we handle it locally. 
+             // Global delete updates are harder without FULL replica identity, but we can rely on manual checks.
+        })
+        .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [currentRole, userName, checkSiteUnreadStatus]);
+
 
   // --- Fetch Messages & Subscribe (Per Site) ---
   useEffect(() => {
@@ -122,19 +189,6 @@ const App: React.FC = () => {
           supabase.removeChannel(channel);
       };
   }, [siteId]);
-
-
-  // Calculate unread sites (Admin) - Requires fetching unread counts or all messages
-  // Simplified: For now, we only know unread status of the CURRENT site via realtime.
-  // To know unread of ALL sites, we'd need a global subscription or summary table.
-  // Since we removed 'allMessages' state which held everything in local storage,
-  // we will temporarily disable the 'unreadSites' indicator for non-active sites to keep performance high,
-  // OR we could fetch unread counts. 
-  // Let's implement a simple fetch for "sites with unread messages" periodically?
-  // For this implementation, I will skip the global unread indicator for simplicity unless requested.
-  // Wait, I can keep `unreadSites` as empty array for now or try to implement it?
-  // I will leave it empty to ensure performance unless I implement a proper unread view.
-  const unreadSites: string[] = []; 
 
 
   // --- メッセージ受信処理 (PeerJS: Signaling & Relay Only) ---
@@ -497,8 +551,11 @@ const App: React.FC = () => {
      
      if (error) {
          console.error("Error deleting message", error);
-         // If error, you might want to fetch messages again to restore state
-         // but for now we just log it.
+     } else {
+         // Check unread status after deletion (if the deleted message was the last unread one)
+         if (currentRole === UserRole.ADMIN && siteId) {
+             checkSiteUnreadStatus(siteId);
+         }
      }
   };
 
@@ -506,6 +563,13 @@ const App: React.FC = () => {
     // Update Supabase
     const { error } = await supabase.from('messages').update({ is_read: true }).eq('id', messageId);
     if (error) console.error("Error marking read", error);
+    
+    // Check if site is clear now
+    if (currentRole === UserRole.ADMIN && siteId) {
+        // Use a small timeout or assume the update will trigger the realtime subscription.
+        // But local update is faster for UX.
+        checkSiteUnreadStatus(siteId);
+    }
   };
 
   const handleAdminAlert = () => {
@@ -558,7 +622,7 @@ const App: React.FC = () => {
         relayErrors={relayErrors} // Pass relay errors
         onTriggerRelay={triggerRelayRequest} // Pass relay trigger
         onDeleteMessage={handleDeleteMessage}
-        unreadSites={unreadSites}
+        unreadSites={Array.from(unreadSites)} // Pass unread sites as array
       />
     );
   }

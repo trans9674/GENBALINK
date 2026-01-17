@@ -9,6 +9,7 @@ interface ChatInterfaceProps {
   userRole?: UserRole;
   chatTitle?: string;
   onDeleteMessage?: (id: string) => void;
+  largeMode?: boolean; // New prop for Field iPad mode
 }
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ 
@@ -18,7 +19,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   onMarkRead, 
   userRole, 
   chatTitle,
-  onDeleteMessage
+  onDeleteMessage,
+  largeMode = false
 }) => {
   const [input, setInput] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
@@ -72,17 +74,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const handlePressStart = (id: string, isMe: boolean) => {
       if (!isMe || !onDeleteMessage) return;
       
-      // Clear any existing timer
       if (pressTimer.current) clearTimeout(pressTimer.current);
 
       pressTimer.current = setTimeout(() => {
-          // Use a slight timeout to allow UI to clear touch state before alert
           setTimeout(() => {
             if (window.confirm("このメッセージを削除しますか？")) {
                 onDeleteMessage(id);
             }
           }, 10);
-      }, 800); // 800ms threshold
+      }, 800); 
   };
 
   const handlePressEnd = () => {
@@ -90,6 +90,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           clearTimeout(pressTimer.current);
           pressTimer.current = null;
       }
+  };
+
+  // --- Dynamic Styles based on Mode ---
+  const styles = {
+      containerPadding: largeMode ? 'p-4' : 'p-4',
+      titleSize: largeMode ? 'text-2xl' : 'text-lg',
+      msgContainer: largeMode ? 'p-4 rounded-xl' : 'p-3 rounded-lg',
+      metaSize: largeMode ? 'text-sm' : 'text-xs',
+      textSize: largeMode ? 'text-2xl leading-relaxed' : 'text-base', // Admin: base, Field: 2xl
+      inputHeight: largeMode ? 'py-3 text-xl' : 'py-2 text-base',
+      btnSize: largeMode ? 'px-6 py-3 text-lg' : 'px-4 py-2 text-sm',
+      iconSize: largeMode ? 'w-8 h-8' : 'w-5 h-5',
+      attachmentText: largeMode ? 'text-lg' : 'text-xs',
+      attachmentIcon: largeMode ? 'w-10 h-10' : 'w-8 h-8',
   };
 
   return (
@@ -133,8 +147,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 if (file) processFile(file);
             }}
         >
-          <div className="p-4 border-b border-slate-800 bg-slate-900 flex justify-between items-center">
-            <h3 className="font-semibold text-slate-200 text-lg">{chatTitle || '現場チャット'}</h3>
+          <div className={`${styles.containerPadding} border-b border-slate-800 bg-slate-900 flex justify-between items-center shrink-0`}>
+            <h3 className={`font-semibold text-slate-200 ${styles.titleSize}`}>{chatTitle || '現場チャット'}</h3>
             {isDragOver && <span className="text-xs text-blue-400 font-bold animate-pulse">ファイルをドロップして送信</span>}
           </div>
           
@@ -157,7 +171,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     onTouchEnd={handlePressEnd}
                     onTouchMove={handlePressEnd} // Cancel on scroll
                     onContextMenu={(e) => e.preventDefault()} // Prevent native context menu
-                    className={`relative max-w-[85%] rounded-lg p-3 text-base transition-all cursor-pointer select-none ${
+                    className={`relative max-w-[90%] ${styles.msgContainer} transition-all cursor-pointer select-none shadow-md ${
                       isMe 
                         ? 'bg-blue-600 text-white' 
                         : isAI 
@@ -165,20 +179,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                           : 'bg-slate-700 text-slate-200'
                     } ${isUnread ? 'ring-2 ring-yellow-400 animate-pulse' : ''} active:scale-95`}
                   >
-                    <div className="flex justify-between items-baseline mb-1 opacity-80 text-xs">
+                    <div className={`flex justify-between items-baseline mb-1 opacity-80 ${styles.metaSize}`}>
                         <span className="font-bold mr-2">{msg.sender}</span>
                         <span>{msg.timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                     </div>
                     
                     {/* Text Content */}
-                    <div className={`whitespace-pre-wrap ${isUnread ? 'font-bold text-yellow-100' : ''}`}>
+                    <div className={`whitespace-pre-wrap ${styles.textSize} ${isUnread ? 'font-bold text-yellow-100' : ''}`}>
                         {isUnread && <span className="inline-block w-2 h-2 bg-yellow-400 rounded-full mr-2"></span>}
                         {msg.text}
                     </div>
 
                     {/* Attachment Content */}
                     {msg.attachment && (
-                        <div className="mt-2 p-2 bg-black/20 rounded overflow-hidden">
+                        <div className="mt-2 p-2 bg-black/20 rounded-lg overflow-hidden">
                             {msg.attachment.type === 'image' ? (
                                 <div className="space-y-1">
                                     <img 
@@ -202,9 +216,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                                     }}
                                     className="flex items-center gap-3 p-2 hover:bg-white/10 rounded transition-colors group"
                                 >
-                                    <div className="w-8 h-8 bg-red-500 rounded flex items-center justify-center text-[10px] font-bold text-white shrink-0">PDF</div>
+                                    <div className={`${styles.attachmentIcon} bg-red-500 rounded flex items-center justify-center text-[10px] font-bold text-white shrink-0`}>PDF</div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="truncate font-medium text-xs group-hover:underline">{msg.attachment.name}</div>
+                                        <div className={`truncate font-medium ${styles.attachmentText} group-hover:underline`}>{msg.attachment.name}</div>
                                         <div className="text-[10px] opacity-70">タップしてダウンロード</div>
                                     </div>
                                 </a>
@@ -234,7 +248,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             <div ref={bottomRef} />
           </div>
 
-          <div className="p-4 border-t border-slate-800 bg-slate-900">
+          <div className={`${styles.containerPadding} border-t border-slate-800 bg-slate-900 shrink-0`}>
             <div className="flex gap-2 items-center">
               <input 
                 type="file" 
@@ -245,10 +259,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full transition-colors"
+                className={`p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full transition-colors`}
                 title="ファイルを添付 (JPEG/PDF)"
               >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className={styles.iconSize} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                 </svg>
               </button>
@@ -258,11 +272,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                 placeholder="メッセージを入力..."
-                className="flex-1 bg-slate-800 border-slate-700 border rounded-md px-3 py-2 text-base text-white focus:outline-none focus:border-blue-500"
+                className={`flex-1 bg-slate-800 border-slate-700 border rounded-md px-3 ${styles.inputHeight} text-white focus:outline-none focus:border-blue-500`}
               />
               <button
                 onClick={handleSend}
-                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                className={`bg-blue-600 hover:bg-blue-500 text-white ${styles.btnSize} rounded-md font-medium transition-colors`}
               >
                 送信
               </button>
