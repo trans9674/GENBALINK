@@ -582,6 +582,7 @@ const App: React.FC = () => {
   return (
     <FieldDashboard 
       siteId={siteId}
+      siteName={sites.find(s => s.id === siteId)?.name} // Pass siteName here
       messages={messages} 
       onSendMessage={handleSendMessage} 
       onTranscription={() => {}}

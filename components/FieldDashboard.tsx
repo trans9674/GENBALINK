@@ -4,6 +4,7 @@ import ChatInterface from './ChatInterface';
 
 interface FieldDashboardProps {
   siteId: string;
+  siteName?: string;
   messages: ChatMessage[];
   onSendMessage: (text: string, attachment?: Attachment) => void;
   incomingAlert: boolean;
@@ -27,6 +28,7 @@ interface FieldDashboardProps {
 
 const FieldDashboard: React.FC<FieldDashboardProps> = ({ 
   siteId,
+  siteName,
   messages, 
   onSendMessage, 
   incomingAlert,
@@ -460,7 +462,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
 
                 <div className="text-center mb-6">
                     <h2 className="text-2xl font-bold text-white tracking-wider">勤怠管理</h2>
-                    <div className="text-sm text-slate-400 mt-1">{siteId}</div>
+                    <div className="text-sm text-slate-400 mt-1">{siteName || siteId}</div>
                 </div>
 
                 {attendanceStep === 'menu' && (
@@ -555,7 +557,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
       <div className="h-16 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-6 shrink-0 z-50">
         <div className="flex items-center gap-4">
             <h1 className="text-xl font-bold text-white tracking-wider">GENBA<span className="text-orange-500">LINK</span></h1>
-            <span className="px-3 py-1 bg-blue-900 text-blue-200 text-xs rounded-full border border-blue-700">{siteId}</span>
+            <span className="px-3 py-1 bg-blue-900 text-blue-200 text-xs rounded-full border border-blue-700">{siteName || siteId}</span>
         </div>
         <div className="flex items-center gap-2 md:gap-4">
             <button 
@@ -651,7 +653,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                     onMarkRead={onMarkRead}
                     userRole={userRole}
                     onDeleteMessage={onDeleteMessage} 
-                    chatTitle={`${siteId} 現場チャット`}
+                    chatTitle={`${siteName || siteId} 現場チャット`}
                     largeMode={true}
                  />
              </div>
