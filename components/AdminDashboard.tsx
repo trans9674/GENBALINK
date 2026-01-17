@@ -149,7 +149,6 @@ const SystemDiagram = () => (
             <rect x="-20" y="-15" width="40" height="30" rx="4" fill="#3b82f6" opacity="0.9" />
             <path d="M-20 15 L20 15 L25 25 L-25 25 Z" fill="#3b82f6" opacity="0.6" />
          </g>
-         <text x="0" y="45" fontSize="10" textAnchor="middle" fill="#93c5fd" fontWeight="bold">管理者PC (3台)</text>
       </g>
 
       {/* Connection Line: Admin -> Cloud */}
@@ -281,6 +280,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
   };
 
+  const isSiteSelected = !!siteId;
 
   // --- Fetch Cameras from Supabase ---
   useEffect(() => {
@@ -364,6 +364,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // --- Start Screen Share ---
   const startScreenShare = async () => {
+    if (!isSiteSelected) return;
+
     try {
       if (localStream) onStreamReady(null); 
 
@@ -641,7 +643,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
              </div>
              
              {/* Remote Volume Control */}
-             <div className="flex items-center gap-2 mr-4 bg-slate-800 p-2 rounded-lg border border-slate-700">
+             <div className={`flex items-center gap-2 mr-4 bg-slate-800 p-2 rounded-lg border border-slate-700 transition-opacity ${!isSiteSelected ? 'opacity-50 pointer-events-none' : ''}`}>
                  <span className="text-xs font-bold text-slate-400">◀ 呼出音量 ▶</span>
                  <input 
                     type="range" 
@@ -651,6 +653,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     value={volumeLevel}
                     onChange={handleVolumeChange}
                     className="w-24 accent-blue-500 cursor-pointer h-2 rounded-lg appearance-none bg-slate-600"
+                    disabled={!isSiteSelected}
                  />
                  <span className="text-xs font-mono text-white w-8 text-right">{volumeLevel}%</span>
              </div>
@@ -667,10 +670,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
              ) : (
                  <button 
                      onClick={callStatus === 'outgoing' ? onEndCall : onStartCall} 
+                     disabled={!isSiteSelected}
                      className={`px-8 py-3.5 rounded-xl text-lg font-bold shadow-lg transition-all border flex items-center gap-3 ${
-                        callStatus === 'outgoing' 
-                        ? 'bg-red-500/80 border-red-500 text-white hover:bg-red-600 animate-pulse' 
-                        : 'bg-blue-600 hover:bg-blue-500 text-white'
+                        !isSiteSelected 
+                        ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed opacity-50'
+                        : callStatus === 'outgoing' 
+                            ? 'bg-red-500/80 border-red-500 text-white hover:bg-red-600 animate-pulse' 
+                            : 'bg-blue-600 hover:bg-blue-500 text-white'
                      }`}
                  >
                      <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -686,10 +692,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
              <button 
                 onClick={isScreenSharing ? stopScreenShare : startScreenShare}
+                disabled={!isSiteSelected}
                 className={`px-8 py-3.5 rounded-xl text-lg font-bold shadow-lg transition-all border flex items-center gap-3 ${
-                    isScreenSharing
-                    ? 'bg-orange-600 border-orange-500 text-white hover:bg-orange-700' 
-                    : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
+                    !isSiteSelected
+                    ? 'bg-slate-800 border-slate-700 text-slate-500 cursor-not-allowed opacity-50'
+                    : isScreenSharing
+                        ? 'bg-orange-600 border-orange-500 text-white hover:bg-orange-700' 
+                        : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
                 }`}
              >
                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
@@ -698,7 +707,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
              <button 
                 onClick={onTriggerAlert}
-                className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-xl text-lg font-bold shadow-lg shadow-blue-900/20 active:scale-95 transition-all flex items-center gap-3"
+                disabled={!isSiteSelected}
+                className={`px-8 py-3.5 rounded-xl text-lg font-bold shadow-lg shadow-blue-900/20 active:scale-95 transition-all flex items-center gap-3 ${
+                    !isSiteSelected 
+                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50' 
+                    : 'bg-blue-600 hover:bg-blue-500 text-white'
+                }`}
              >
                 <span className="text-2xl">🔔</span>
                 呼出し
@@ -946,6 +960,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
             onMarkRead={onMarkRead} 
             chatTitle={currentSiteName ? `${currentSiteName} 現場チャット` : '現場チャット'}
             onDeleteMessage={onDeleteMessage} // Pass delete handler
+            disabled={!siteId} // Disable chat when no site selected
           />
         </div>
         {/* Modals ... (Rest of code is unchanged) */}

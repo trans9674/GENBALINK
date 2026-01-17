@@ -10,6 +10,7 @@ interface ChatInterfaceProps {
   chatTitle?: string;
   onDeleteMessage?: (id: string) => void;
   largeMode?: boolean; // New prop for Field iPad mode
+  disabled?: boolean; // New prop to disable interaction
 }
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ 
@@ -20,7 +21,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   userRole, 
   chatTitle,
   onDeleteMessage,
-  largeMode = false
+  largeMode = false,
+  disabled = false
 }) => {
   const [input, setInput] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
@@ -34,7 +36,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   }, [messages]);
 
   const handleSend = () => {
-    if (!input.trim()) return;
+    if (!input.trim() || disabled) return;
     onSendMessage(input);
     setInput('');
   };
@@ -47,6 +49,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   };
 
   const processFile = (file: File) => {
+    if (disabled) return;
     if (file.type !== 'image/jpeg' && file.type !== 'application/pdf') {
         alert('JPEG画像またはPDFファイルのみ添付可能です');
         return;
@@ -72,7 +75,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
   // --- Long Press / Hold to Delete ---
   const handlePressStart = (id: string, isMe: boolean) => {
-      if (!isMe || !onDeleteMessage) return;
+      if (!isMe || !onDeleteMessage || disabled) return;
       
       if (pressTimer.current) clearTimeout(pressTimer.current);
 
@@ -137,14 +140,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         )}
 
         <div 
-            className="flex flex-col h-full bg-slate-900 border-l border-slate-700"
-            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+            className={`flex flex-col h-full bg-slate-900 border-l border-slate-700 ${disabled ? 'opacity-70 pointer-events-none' : ''}`}
+            onDragOver={(e) => { if(!disabled) { e.preventDefault(); setIsDragOver(true); } }}
             onDragLeave={() => setIsDragOver(false)}
             onDrop={(e) => {
-                e.preventDefault();
-                setIsDragOver(false);
-                const file = e.dataTransfer.files?.[0];
-                if (file) processFile(file);
+                if(!disabled) {
+                    e.preventDefault();
+                    setIsDragOver(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) processFile(file);
+                }
             }}
         >
           <div className={`${styles.containerPadding} border-b border-slate-800 bg-slate-900 flex justify-between items-center shrink-0`}>
@@ -153,6 +158,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {messages.length === 0 && (
+                <div className="text-center text-slate-600 text-sm mt-10">
+                    {disabled ? '現場を選択してください' : 'メッセージはありません'}
+                </div>
+            )}
             {messages.map((msg) => {
               const isMe = msg.sender === userName;
               const isAI = msg.sender === 'AI';
@@ -248,7 +258,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             <div ref={bottomRef} />
           </div>
 
-          <div className={`${styles.containerPadding} border-t border-slate-800 bg-slate-900 shrink-0`}>
+          <div className={`${styles.containerPadding} border-t border-slate-800 bg-slate-900 shrink-0 relative`}>
+            {disabled && <div className="absolute inset-0 bg-slate-950/50 z-10 cursor-not-allowed"></div>}
             <div className="flex gap-2 items-center">
               <input 
                 type="file" 
@@ -256,10 +267,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 className="hidden"
                 accept="image/jpeg,application/pdf"
                 onChange={handleFileSelect}
+                disabled={disabled}
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className={`p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full transition-colors`}
+                disabled={disabled}
+                className={`p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                 title="ファイルを添付 (JPEG/PDF)"
               >
                 <svg className={styles.iconSize} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -271,18 +284,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="メッセージを入力..."
-                className={`flex-1 bg-slate-800 border-slate-700 border rounded-md px-3 ${styles.inputHeight} text-white focus:outline-none focus:border-blue-500`}
+                disabled={disabled}
+                placeholder={disabled ? "現場を選択してください" : "メッセージを入力..."}
+                className={`flex-1 bg-slate-800 border-slate-700 border rounded-md px-3 ${styles.inputHeight} text-white focus:outline-none focus:border-blue-500 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
               />
               <button
                 onClick={handleSend}
-                className={`bg-blue-600 hover:bg-blue-500 text-white ${styles.btnSize} rounded-md font-medium transition-colors`}
+                disabled={disabled}
+                className={`bg-blue-600 hover:bg-blue-500 text-white ${styles.btnSize} rounded-md font-medium transition-colors ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 送信
               </button>
-            </div>
-            <div className="text-[10px] text-slate-500 mt-1 text-center">
-                ※ 自分のメッセージを長押しすると削除できます
             </div>
           </div>
         </div>

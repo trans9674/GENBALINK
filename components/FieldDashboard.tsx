@@ -282,9 +282,14 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
               osc.type = 'sine';
               osc.frequency.setValueAtTime(freq, time);
               
-              // Apply dynamic volume
+              // Apply dynamic volume with boost
+              // Request: Current 100% (1.0) should be roughly 20% position.
+              // So we multiply by 5.0. (0.2 input * 5.0 = 1.0 gain).
+              const volumeMultiplier = 5.0; 
+              const finalVolume = alertVolume * volumeMultiplier;
+
               gain.gain.setValueAtTime(0, time);
-              gain.gain.linearRampToValueAtTime(alertVolume, time + 0.05); // Use prop volume
+              gain.gain.linearRampToValueAtTime(finalVolume, time + 0.05); 
               gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
               
               osc.start(time);
