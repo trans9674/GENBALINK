@@ -132,15 +132,28 @@ const SystemDiagram = () => (
         </filter>
       </defs>
 
-      {/* --- Admin Side (Left) --- */}
-      <g transform="translate(40, 60)">
-         <rect x="-20" y="-15" width="40" height="30" rx="4" fill="#3b82f6" opacity="0.9" />
-         <path d="M-20 15 L20 15 L25 25 L-25 25 Z" fill="#3b82f6" opacity="0.6" />
-         <text x="0" y="40" fontSize="10" textAnchor="middle" fill="#93c5fd" fontWeight="bold">管理者PC</text>
+      {/* --- Admin Side (Left) - 3 PCs --- */}
+      <g transform="translate(50, 60)">
+         {/* PC 1 (Back Left) */}
+         <g transform="translate(-20, -15) scale(0.8)">
+            <rect x="-20" y="-15" width="40" height="30" rx="4" fill="#1e3a8a" opacity="0.8" />
+            <path d="M-20 15 L20 15 L25 25 L-25 25 Z" fill="#1e3a8a" opacity="0.5" />
+         </g>
+         {/* PC 2 (Back Right) */}
+         <g transform="translate(20, -15) scale(0.8)">
+            <rect x="-20" y="-15" width="40" height="30" rx="4" fill="#1e3a8a" opacity="0.8" />
+            <path d="M-20 15 L20 15 L25 25 L-25 25 Z" fill="#1e3a8a" opacity="0.5" />
+         </g>
+         {/* PC 3 (Front Center) */}
+         <g transform="translate(0, 5)">
+            <rect x="-20" y="-15" width="40" height="30" rx="4" fill="#3b82f6" opacity="0.9" />
+            <path d="M-20 15 L20 15 L25 25 L-25 25 Z" fill="#3b82f6" opacity="0.6" />
+         </g>
+         <text x="0" y="45" fontSize="10" textAnchor="middle" fill="#93c5fd" fontWeight="bold">管理者PC (3台)</text>
       </g>
 
       {/* Connection Line: Admin -> Cloud */}
-      <line x1="70" y1="75" x2="130" y2="75" stroke="#64748b" strokeWidth="2" strokeDasharray="4 2" markerEnd="url(#arrowhead)" />
+      <line x1="90" y1="75" x2="130" y2="75" stroke="#64748b" strokeWidth="2" strokeDasharray="4 2" markerEnd="url(#arrowhead)" />
 
       {/* --- Cloud (Center) --- */}
       <g transform="translate(160, 75)">
