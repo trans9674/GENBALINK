@@ -242,17 +242,18 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
     setAttendanceStep('result');
   };
 
-  // --- Render Call Widget (Larger Buttons for Sidebar) ---
+  // --- Render Call Widget (Smaller Buttons for Sidebar) ---
   const renderCallWidget = () => {
-      const buttonBaseClass = "w-44 h-44 rounded-3xl flex flex-col items-center justify-center gap-3 shadow-xl transition-all active:scale-95 border-4";
-      const iconClass = "w-20 h-20";
-      const textClass = "font-bold text-2xl";
+      // Reduced size: w-28 h-24 (approx half area of previous w-44 h-44)
+      const buttonBaseClass = "w-28 h-24 rounded-xl flex flex-col items-center justify-center gap-1 shadow-xl transition-all active:scale-95 border-2";
+      const iconClass = "w-8 h-8";
+      const textClass = "font-bold text-sm leading-tight text-center px-1";
 
       switch (callStatus) {
           case 'incoming':
               return (
-                  <div className="flex flex-col gap-4 animate-bounce w-full items-center">
-                      <div className="text-white font-bold bg-red-600 px-4 py-2 rounded-full text-lg mb-2 shadow-lg w-full text-center">着信中...</div>
+                  <div className="flex flex-col gap-2 animate-bounce w-full items-center">
+                      <div className="text-white font-bold bg-red-600 px-2 py-1 rounded-full text-xs mb-1 shadow-lg w-full text-center">着信中...</div>
                       <button 
                           onClick={onAcceptCall}
                           className={`${buttonBaseClass} bg-green-600 hover:bg-green-500 border-white text-white`}
@@ -262,7 +263,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                       </button>
                       <button 
                           onClick={onEndCall}
-                          className="w-full bg-red-600 hover:bg-red-500 py-3 rounded-xl text-white font-bold text-lg border-2 border-white/20"
+                          className="w-full bg-red-600 hover:bg-red-500 py-2 rounded-xl text-white font-bold text-sm border border-white/20"
                       >
                           拒否
                       </button>
@@ -271,7 +272,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
           case 'outgoing':
                return (
                   <div className="flex flex-col items-center gap-2 w-full">
-                       <div className="text-white font-bold animate-pulse text-lg mb-1">呼び出し中...</div>
+                       <div className="text-white font-bold animate-pulse text-xs mb-1">呼出中...</div>
                        <button 
                           onClick={onEndCall}
                           className={`${buttonBaseClass} bg-red-600 hover:bg-red-500 border-white text-white`}
@@ -284,7 +285,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
           case 'connected':
                return (
                   <div className="flex flex-col items-center gap-2 w-full">
-                       <div className="text-green-400 font-bold text-lg mb-1 border border-green-500/50 bg-green-900/50 px-3 py-1 rounded">通話中</div>
+                       <div className="text-green-400 font-bold text-xs mb-1 border border-green-500/50 bg-green-900/50 px-2 py-0.5 rounded">通話中</div>
                        <button 
                           onClick={onEndCall}
                           className={`${buttonBaseClass} bg-red-600 hover:bg-red-500 border-white text-white animate-pulse`}
@@ -303,7 +304,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                         <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                         </svg>
-                        <span className={textClass}>管理者と会話</span>
+                        <span className={textClass}>会話</span>
                    </button>
                );
       }
@@ -326,9 +327,6 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
       </div>
     );
   }
-
-  // Conditions to hide chat
-  const shouldHideChat = callStatus === 'connected' || !!adminStream;
 
   return (
     <div className="h-screen flex flex-col bg-slate-950 relative">
@@ -467,35 +465,50 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
       </div>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* SIDEBAR: Controls (Expanded width) */}
-        <div className="w-56 bg-slate-900 border-r border-slate-800 flex flex-col pt-6 items-center gap-8 shrink-0 z-40 overflow-y-auto pb-4">
-             {/* 1. Entry/Exit Button (Enlarged) */}
+        {/* SIDEBAR: Controls (Narrower width: w-32) */}
+        <div className="w-32 bg-slate-900 border-r border-slate-800 flex flex-col pt-6 items-center gap-6 shrink-0 z-40 overflow-y-auto pb-4">
+             {/* 1. Entry/Exit Button (Reduced Size: w-28 h-24) */}
              <button 
                 onClick={() => {
                     setShowAttendanceModal(true);
                     setAttendanceStep('menu');
                     resetInactivityTimer();
                 }}
-                className={`w-44 h-44 rounded-3xl flex flex-col items-center justify-center gap-3 border-4 transition-transform active:scale-95 shadow-xl ${
+                className={`w-28 h-24 rounded-xl flex flex-col items-center justify-center gap-1 border-2 transition-transform active:scale-95 shadow-xl ${
                     showAttendanceModal 
                     ? 'bg-slate-800 border-blue-500 text-blue-400' 
                     : 'bg-slate-800 border-slate-600 text-slate-300 hover:text-white hover:border-slate-500'
                 }`}
             >
-                <svg className="w-20 h-20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
                 </svg>
-                <span className="text-2xl font-bold">入退場</span>
+                <span className="text-lg font-bold">入退場</span>
             </button>
 
-            {/* 2. Call Widget (Moved here) */}
+            {/* 2. Call Widget (Sized to match) */}
             {renderCallWidget()}
         </div>
 
         {/* Main Content Area */}
         <div className="flex-1 flex relative bg-black min-w-0">
-             {/* Video Area */}
-             <div className={`relative bg-black flex items-center justify-center transition-all duration-300 ${shouldHideChat ? 'flex-1' : 'w-[50%] md:w-[45%]'}`}>
+             
+             {/* 1. CHAT INTERFACE (Left/Center) - Taking priority and space next to buttons */}
+             <div className="flex-1 border-r border-slate-800 bg-slate-900 flex flex-col min-w-0">
+                 <ChatInterface 
+                    messages={messages} 
+                    onSendMessage={onSendMessage} 
+                    userName={userName}
+                    onMarkRead={onMarkRead}
+                    userRole={userRole}
+                    onDeleteMessage={onDeleteMessage} 
+                    chatTitle={`${siteId} 現場チャット`}
+                    largeMode={true}
+                 />
+             </div>
+
+             {/* 2. VIDEO AREA (Right) - Reduced width to 40% */}
+             <div className="w-[40%] relative bg-black flex items-center justify-center">
                 
                 {/* 1. Admin Video (Screen Share) - MAIN BACKGROUND LAYER */}
                 <video 
@@ -513,7 +526,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                     <div 
                         className={`transition-all duration-500 ease-in-out z-10 ${
                             adminStream 
-                            ? 'absolute bottom-24 right-4 w-32 md:w-48 aspect-[3/4] md:aspect-video rounded-lg overflow-hidden border-2 border-slate-600 shadow-2xl' 
+                            ? 'absolute bottom-4 right-4 w-32 aspect-video rounded-lg overflow-hidden border-2 border-slate-600 shadow-2xl' 
                             : 'absolute inset-0 w-full h-full'
                         }`}
                     >
@@ -532,45 +545,24 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                     </div>
                 )}
                 
-                {/* Visual Alert Overlay (Calling) - Keeping this for huge visual cue */}
+                {/* Visual Alert Overlay (Calling) */}
                 {(incomingAlert || callStatus === 'incoming') && (
-                    <div className="absolute inset-0 z-50 pointer-events-none border-[12px] border-blue-500/80 animate-pulse flex items-center justify-center bg-blue-900/20">
-                        <div className="bg-blue-600 text-white font-black text-4xl md:text-5xl px-8 py-8 rounded-2xl shadow-2xl animate-bounce tracking-widest border-4 border-white flex flex-col items-center gap-4">
-                            <span className="text-6xl">🔔</span>
-                            <span>管理者からの呼出し</span>
+                    <div className="absolute inset-0 z-50 pointer-events-none border-[8px] border-blue-500/80 animate-pulse flex items-center justify-center bg-blue-900/20">
+                        <div className="bg-blue-600 text-white font-black text-2xl px-6 py-6 rounded-2xl shadow-2xl animate-bounce tracking-widest border-4 border-white flex flex-col items-center gap-2">
+                            <span className="text-4xl">🔔</span>
+                            <span>呼出し</span>
                         </div>
                     </div>
                 )}
                 
-                {/* Connection Status Overlay (Mobile/Partial) */}
-                {(!connectionStatus.includes('完了') && callStatus !== 'connected' && !adminStream) && (
-                    <div className="absolute top-4 left-4 right-4 bg-yellow-900/80 text-yellow-100 p-2 rounded text-center text-sm backdrop-blur border border-yellow-700/50 z-20">
-                        <p className="font-bold mb-1">未接続: 管理者端末を探しています...</p>
-                        <button 
-                            onClick={onReconnect}
-                            className="bg-yellow-700 text-white px-3 py-1 rounded text-xs mt-1"
-                        >
-                            再試行
-                        </button>
+                {/* Placeholder if no video */}
+                {!adminStream && callStatus !== 'connected' && (
+                    <div className="text-slate-700 flex flex-col items-center">
+                        <svg className="w-16 h-16 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        <span className="text-xs mt-2 opacity-50">Video Area</span>
                     </div>
                 )}
              </div>
-
-             {/* Right Chat Sidebar (Expanded & Hideable) */}
-             {!shouldHideChat && (
-                 <div className="flex-1 border-l border-slate-800 bg-slate-900 flex flex-col min-w-0">
-                     <ChatInterface 
-                        messages={messages} 
-                        onSendMessage={onSendMessage} 
-                        userName={userName}
-                        onMarkRead={onMarkRead}
-                        userRole={userRole}
-                        onDeleteMessage={onDeleteMessage} 
-                        chatTitle={`${siteId} 現場チャット`}
-                        largeMode={true}
-                     />
-                 </div>
-             )}
         </div>
       </div>
     </div>
