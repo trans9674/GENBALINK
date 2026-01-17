@@ -20,6 +20,7 @@ interface FieldDashboardProps {
   userName: string;
   onMarkRead: (id: string) => void; 
   userRole: UserRole;
+  onDeleteMessage?: (id: string) => void;
 }
 
 const FieldDashboard: React.FC<FieldDashboardProps> = ({ 
@@ -37,7 +38,8 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   onEndCall,
   userName,
   onMarkRead,
-  userRole
+  userRole,
+  onDeleteMessage
 }) => {
   const [ecoMode, setEcoMode] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -560,6 +562,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                     userName={userName}
                     onMarkRead={onMarkRead}
                     userRole={userRole}
+                    onDeleteMessage={onDeleteMessage} // Pass handler
                  />
              </div>
         </div>

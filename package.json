@@ -12,7 +12,8 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "@google/genai": "^1.35.0",
-    "peerjs": "1.5.2"
+    "peerjs": "1.5.2",
+    "@supabase/supabase-js": "2.39.3"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

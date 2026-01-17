@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChatMessage, Attachment, CallStatus, UserRole, CameraConfig, Site } from '../types';
 import ChatInterface from './ChatInterface';
+import { supabase } from '../lib/supabaseClient';
 
 interface AdminDashboardProps {
   siteId: string;
@@ -25,6 +26,8 @@ interface AdminDashboardProps {
   relayImages?: Record<string, string>; // { cameraId: base64 }
   onTriggerRelay?: (config: CameraConfig) => void;
   relayErrors?: Record<string, string>; // { cameraId: errorMessage }
+  onDeleteMessage?: (id: string) => void; // New prop
+  unreadSites?: string[]; // New prop: List of site IDs with unread messages
 }
 
 // Annotation types
@@ -183,7 +186,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     onMarkRead,
     relayImages,
     onTriggerRelay,
-    relayErrors
+    relayErrors,
+    onDeleteMessage,
+    unreadSites = []
 }) => {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -209,28 +214,52 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [newSiteForm, setNewSiteForm] = useState({ id: '', name: '' });
 
 
-  // --- Persistence Logic for Cameras ---
-  // Load cameras when siteId changes
+  // --- Fetch Cameras from Supabase ---
   useEffect(() => {
-    const savedCameras = localStorage.getItem(`genbalink_cameras_${siteId}`);
-    if (savedCameras) {
-      try {
-        setCameras(JSON.parse(savedCameras));
-      } catch (e) {
-        console.error("Failed to parse cameras", e);
+    if (!siteId) {
         setCameras([]);
-      }
-    } else {
-      setCameras([]);
+        return;
     }
-  }, [siteId]);
 
-  // Save cameras whenever they change (and siteId is valid)
-  useEffect(() => {
-    if (siteId) {
-      localStorage.setItem(`genbalink_cameras_${siteId}`, JSON.stringify(cameras));
-    }
-  }, [cameras, siteId]);
+    const fetchCameras = async () => {
+        const { data, error } = await supabase
+            .from('cameras')
+            .select('*')
+            .eq('site_id', siteId);
+        
+        if (error) {
+            console.error("Error fetching cameras:", error);
+            return;
+        }
+
+        if (data) {
+            // Map Snake_case to CamelCase
+            const mappedCameras: CameraConfig[] = data.map((c: any) => ({
+                id: c.id,
+                name: c.name,
+                type: c.type,
+                url: c.url,
+                refreshInterval: c.refresh_interval,
+                isRelay: c.is_relay,
+            }));
+            setCameras(mappedCameras);
+        }
+    };
+
+    fetchCameras();
+    
+    // Subscribe to Camera changes (Optional, if multiple admins)
+    const channel = supabase.channel(`cameras:${siteId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'cameras', filter: `site_id=eq.${siteId}` }, 
+        () => {
+            fetchCameras();
+        })
+        .subscribe();
+
+    return () => {
+        supabase.removeChannel(channel);
+    };
+  }, [siteId]);
 
 
   // --- Remote Video Handling ---
@@ -494,13 +523,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
       }
   };
 
-  // --- Camera Management ---
-  const handleAddCamera = () => {
-    if (newCamera.name && newCamera.url) {
-      setCameras(prev => [...prev, { ...newCamera, id: Date.now().toString() } as CameraConfig]);
-      setNewCamera({ type: 'mjpeg', refreshInterval: 1000, name: '', url: '', isRelay: false });
-      setShowCameraModal(false);
+  // --- Camera Management (Supabase) ---
+  const handleAddCamera = async () => {
+    if (newCamera.name && newCamera.url && siteId) {
+      const cameraPayload = {
+          id: Date.now().toString(),
+          site_id: siteId,
+          name: newCamera.name,
+          type: newCamera.type,
+          url: newCamera.url,
+          refresh_interval: newCamera.refreshInterval || 1000,
+          is_relay: newCamera.isRelay || false
+      };
+      
+      const { error } = await supabase.from('cameras').insert(cameraPayload);
+      if (error) {
+          console.error("Failed to add camera", error);
+          alert("カメラの追加に失敗しました");
+      } else {
+          setNewCamera({ type: 'mjpeg', refreshInterval: 1000, name: '', url: '', isRelay: false });
+          setShowCameraModal(false);
+      }
     }
+  };
+
+  const handleDeleteCamera = async (id: string) => {
+      if (!confirm("このカメラを削除しますか？")) return;
+      const { error } = await supabase.from('cameras').delete().eq('id', id);
+      if (error) console.error("Failed to delete camera", error);
   };
 
   const handleAddNewSite = () => {
@@ -575,7 +625,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
                 }`}
              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                 {isScreenSharing ? '共有停止' : '画面共有'}
              </button>
 
@@ -609,7 +659,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <button
                         key={site.id}
                         onClick={() => onSwitchSite(site.id)}
-                        className={`w-full text-left p-3 rounded-lg border transition-all duration-200 ${
+                        className={`w-full text-left p-3 rounded-lg border transition-all duration-200 relative ${
                             siteId === site.id 
                             ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.6)] scale-105 z-10 border-blue-400 ring-1 ring-blue-300' 
                             : 'bg-slate-800/50 border-slate-700 hover:bg-slate-800 hover:border-slate-600 text-slate-400'
@@ -620,6 +670,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <span>{site.id}</span>
                             {siteId === site.id && <span className="text-green-300 animate-pulse font-bold">● 接続中</span>}
                         </div>
+                        {/* UNREAD INDICATOR */}
+                        {unreadSites.includes(site.id) && (
+                            <div className="absolute -top-1 -right-1 z-20">
+                                <span className="relative flex h-3 w-3">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
+                                </span>
+                                <div className="absolute top-4 right-0 bg-yellow-500 text-slate-900 text-[9px] font-black px-1.5 py-0.5 rounded border-2 border-slate-900 whitespace-nowrap shadow-lg animate-pulse">
+                                    未読メッセージあり
+                                </div>
+                            </div>
+                        )}
                     </button>
                 ))}
             </div>
@@ -633,7 +695,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                  <div className="flex-1 bg-slate-900 rounded-lg border border-slate-800 overflow-hidden relative flex flex-col">
                     <div className="p-2 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
                         <span className="text-sm font-bold text-orange-400 flex items-center gap-2">
-                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                              画面共有 & 指示モード
                         </span>
                     </div>
@@ -726,7 +788,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {cameras[index] ? (
                                 <SurveillanceCamera 
                                     config={cameras[index]} 
-                                    onDelete={() => setCameras(prev => prev.filter((_, i) => i !== index))} 
+                                    onDelete={() => handleDeleteCamera(cameras[index].id)} 
                                     relayImage={relayImages ? relayImages[cameras[index].id] : undefined}
                                     relayError={relayErrors ? relayErrors[cameras[index].id] : undefined}
                                     onTriggerRelay={onTriggerRelay}
@@ -751,15 +813,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {/* Right Chat Sidebar */}
         <div className="w-96 border-l border-slate-800 shrink-0">
           <ChatInterface 
+            key={siteId}
             messages={messages} 
             onSendMessage={onSendMessage} 
             userName={userName} 
             userRole={userRole} 
             onMarkRead={onMarkRead} 
             chatTitle={currentSiteName ? `${currentSiteName} 現場チャット` : '現場チャット'}
+            onDeleteMessage={onDeleteMessage} // Pass delete handler
           />
         </div>
-
+        {/* Modals ... (Rest of code is unchanged) */}
         {/* Add Camera Modal */}
         {showCameraModal && (
             <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">

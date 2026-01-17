@@ -7,15 +7,25 @@ interface ChatInterfaceProps {
   userName: string;
   onMarkRead?: (id: string) => void;
   userRole?: UserRole;
-  chatTitle?: string; // Added prop for custom title
+  chatTitle?: string;
+  onDeleteMessage?: (id: string) => void;
 }
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, userName, onMarkRead, userRole, chatTitle }) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ 
+  messages, 
+  onSendMessage, 
+  userName, 
+  onMarkRead, 
+  userRole, 
+  chatTitle,
+  onDeleteMessage
+}) => {
   const [input, setInput] = useState('');
   const [isDragOver, setIsDragOver] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -31,7 +41,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
     const file = e.target.files?.[0];
     if (!file) return;
     processFile(file);
-    // Reset input
     e.target.value = '';
   };
 
@@ -57,6 +66,24 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
         onSendMessage(`${file.name} を送信しました`, attachment);
     };
     reader.readAsDataURL(file);
+  };
+
+  // --- Long Press / Hold to Delete ---
+  const handlePressStart = (id: string, isMe: boolean) => {
+      if (!isMe || !onDeleteMessage) return;
+      
+      pressTimer.current = setTimeout(() => {
+          if (window.confirm("このメッセージを削除しますか？")) {
+              onDeleteMessage(id);
+          }
+      }, 800); // 800ms threshold
+  };
+
+  const handlePressEnd = () => {
+      if (pressTimer.current) {
+          clearTimeout(pressTimer.current);
+          pressTimer.current = null;
+      }
   };
 
   return (
@@ -116,13 +143,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
                 <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                   <div 
                     onClick={() => isUnread && onMarkRead && onMarkRead(msg.id)}
-                    className={`max-w-[85%] rounded-lg p-3 text-base transition-all cursor-pointer ${
+                    // Long press handlers
+                    onMouseDown={() => handlePressStart(msg.id, isMe)}
+                    onMouseUp={handlePressEnd}
+                    onMouseLeave={handlePressEnd}
+                    onTouchStart={() => handlePressStart(msg.id, isMe)}
+                    onTouchEnd={handlePressEnd}
+                    className={`relative max-w-[85%] rounded-lg p-3 text-base transition-all cursor-pointer select-none ${
                       isMe 
                         ? 'bg-blue-600 text-white' 
                         : isAI 
                           ? 'bg-emerald-700 text-emerald-50 border border-emerald-600'
                           : 'bg-slate-700 text-slate-200'
-                    } ${isUnread ? 'ring-2 ring-yellow-400 animate-pulse' : ''}`}
+                    } ${isUnread ? 'ring-2 ring-yellow-400 animate-pulse' : ''} active:scale-95`}
                   >
                     <div className="flex justify-between items-baseline mb-1 opacity-80 text-xs">
                         <span className="font-bold mr-2">{msg.sender}</span>
@@ -172,12 +205,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
                     )}
 
                     {/* Status Labels */}
-                    {/* 自分の送信メッセージが既読になった場合 */}
                     {isMe && isRead && (
                       <div className="text-[10px] text-right mt-1 opacity-70">既読</div>
                     )}
                     
-                    {/* 相手からのメッセージを自分が既読にした場合（追加） */}
                     {!isMe && isRead && (
                        <div className="text-[10px] text-right mt-1 opacity-70 text-green-300">既読</div>
                     )}
@@ -227,6 +258,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ messages, onSendMessage, 
               >
                 送信
               </button>
+            </div>
+            <div className="text-[10px] text-slate-500 mt-1 text-center">
+                ※ 自分のメッセージを長押しすると削除できます
             </div>
           </div>
         </div>
