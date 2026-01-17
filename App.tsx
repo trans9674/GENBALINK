@@ -19,6 +19,7 @@ const App: React.FC = () => {
   const [relayErrors, setRelayErrors] = useState<Record<string, string>>({});
 
   const [incomingAlert, setIncomingAlert] = useState(false);
+  const [isFieldCameraOff, setIsFieldCameraOff] = useState(false); // New state for Camera Off message
   
   // Sites Management (For Admin)
   const [sites, setSites] = useState<Site[]>([]);
@@ -209,6 +210,9 @@ const App: React.FC = () => {
         setCallStatus('connected');
     } else if (type === 'CALL_END') {
         setCallStatus('idle');
+    } else if (type === 'CAMERA_STATUS') {
+        // [Admin Side] Received camera status update from Field
+        setIsFieldCameraOff(payload.isOff);
     } else if (type === 'RELAY_REQUEST') {
         // [Field Side] Admin requested a camera image relay
         // Payload: { cameraId, url }
@@ -306,6 +310,7 @@ const App: React.FC = () => {
          connRef.current = null;
          setCallStatus('idle');
          setRemoteStream(null);
+         setIsFieldCameraOff(false); // Reset status on disconnect
          startConnectionRetryRef.current();
       });
       
@@ -362,6 +367,7 @@ const App: React.FC = () => {
         setCallStatus('idle');
         setRelayImages({}); // Clear images on disconnect
         setRelayErrors({});
+        setIsFieldCameraOff(false);
     }
 
     const myPeerId = currentRole === UserRole.FIELD ? siteId : `${siteId}-admin`;
@@ -499,21 +505,26 @@ const App: React.FC = () => {
       }
   };
 
+  // --- Field Camera Status Handling ---
+  const handleSetCameraStatus = (isOff: boolean) => {
+      if (connRef.current && connRef.current.open) {
+          connRef.current.send({ type: 'CAMERA_STATUS', payload: { isOff } });
+      }
+  };
+
   // --- UI Actions ---
   const handleLogin = (role: UserRole, id: string, name: string, initialSites?: Site[]) => {
     setSiteId(id);
     setCurrentRole(role);
     const effectiveName = role === UserRole.FIELD ? "現地" : (name || "管理者");
     setUserName(effectiveName);
-    // Note: 'sites' passed from Login are ignored now, we fetch from Supabase in App for Admin.
-    // However, if initialSites are provided (from localStorage in Login), we could use them as initial state.
-    // But Supabase fetch will overwrite them, which is fine.
   };
 
   const handleSwitchSite = (newSiteId: string) => {
       setSiteId(newSiteId);
       setRelayImages({}); 
       setRelayErrors({});
+      setIsFieldCameraOff(false); // Reset when switching sites
   };
 
   const handleAddSite = async (newSite: Site) => {
@@ -543,16 +554,12 @@ const App: React.FC = () => {
   };
 
   const handleDeleteMessage = async (id: string) => {
-     // 1. Optimistic Update: Remove locally immediately for better UX
      setMessages(prev => prev.filter(m => m.id !== id));
-
-     // 2. Delete from Supabase
      const { error } = await supabase.from('messages').delete().eq('id', id);
      
      if (error) {
          console.error("Error deleting message", error);
      } else {
-         // Check unread status after deletion (if the deleted message was the last unread one)
          if (currentRole === UserRole.ADMIN && siteId) {
              checkSiteUnreadStatus(siteId);
          }
@@ -560,14 +567,9 @@ const App: React.FC = () => {
   };
 
   const handleMarkRead = async (messageId: string) => {
-    // Update Supabase
     const { error } = await supabase.from('messages').update({ is_read: true }).eq('id', messageId);
     if (error) console.error("Error marking read", error);
-    
-    // Check if site is clear now
     if (currentRole === UserRole.ADMIN && siteId) {
-        // Use a small timeout or assume the update will trigger the realtime subscription.
-        // But local update is faster for UX.
         checkSiteUnreadStatus(siteId);
     }
   };
@@ -623,6 +625,7 @@ const App: React.FC = () => {
         onTriggerRelay={triggerRelayRequest} // Pass relay trigger
         onDeleteMessage={handleDeleteMessage}
         unreadSites={Array.from(unreadSites)} // Pass unread sites as array
+        isFieldCameraOff={isFieldCameraOff} // Pass Camera Off status
       />
     );
   }
@@ -647,6 +650,7 @@ const App: React.FC = () => {
       onMarkRead={handleMarkRead}
       userRole={currentRole}
       onDeleteMessage={handleDeleteMessage}
+      onSetCameraStatus={handleSetCameraStatus} // Pass handler
     />
   );
 };

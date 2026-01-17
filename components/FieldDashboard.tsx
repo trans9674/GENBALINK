@@ -21,6 +21,7 @@ interface FieldDashboardProps {
   onMarkRead: (id: string) => void; 
   userRole: UserRole;
   onDeleteMessage?: (id: string) => void;
+  onSetCameraStatus?: (isOff: boolean) => void;
 }
 
 const FieldDashboard: React.FC<FieldDashboardProps> = ({ 
@@ -39,7 +40,8 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   userName,
   onMarkRead,
   userRole,
-  onDeleteMessage
+  onDeleteMessage,
+  onSetCameraStatus
 }) => {
   const [ecoMode, setEcoMode] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -47,6 +49,10 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const inactivityTimerRef = useRef<number | null>(null);
   
+  // Camera Off (Privacy) Mode
+  const [cameraOffEndTime, setCameraOffEndTime] = useState<number | null>(null);
+  const [remainingTime, setRemainingTime] = useState('');
+
   // Local stream reference to manage tracks directly
   const localStreamRef = useRef<MediaStream | null>(null);
 
@@ -113,8 +119,42 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
     };
   }, []);
 
+  // --- Privacy Mode Timer Logic ---
+  useEffect(() => {
+      if (!cameraOffEndTime) return;
+
+      const updateTimer = () => {
+          const diff = cameraOffEndTime - Date.now();
+          if (diff <= 0) {
+              setCameraOffEndTime(null);
+              if (onSetCameraStatus) onSetCameraStatus(false);
+              return;
+          }
+          const m = Math.floor(diff / 60000);
+          const s = Math.floor((diff % 60000) / 1000);
+          setRemainingTime(`${m}:${s.toString().padStart(2, '0')}`);
+      };
+
+      updateTimer(); // Initial
+      const interval = setInterval(updateTimer, 1000);
+      return () => clearInterval(interval);
+  }, [cameraOffEndTime, onSetCameraStatus]);
+
+  // Resend status on reconnect
+  useEffect(() => {
+      if (connectionStatus.includes('完了') && cameraOffEndTime && onSetCameraStatus) {
+          onSetCameraStatus(true);
+      }
+  }, [connectionStatus, cameraOffEndTime, onSetCameraStatus]);
+
   // --- Handle Local Camera (Controlled by Call Status) ---
   const startCamera = async () => {
+    // Block if privacy mode is active
+    if (cameraOffEndTime && Date.now() < cameraOffEndTime) {
+        console.log("Camera blocked by privacy mode");
+        return;
+    }
+
     try {
       console.log("Starting Camera for Call...");
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -150,8 +190,13 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
      }
   };
 
-  // Sync Camera with Call Status
+  // Sync Camera with Call Status & Privacy Mode
   useEffect(() => {
+      if (cameraOffEndTime) {
+          stopCamera();
+          return;
+      }
+
       if (callStatus === 'connected') {
           startCamera();
       } else {
@@ -161,7 +206,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
       return () => {
           stopCamera();
       };
-  }, [callStatus]);
+  }, [callStatus, cameraOffEndTime]);
 
 
   // Handle Admin Stream
@@ -242,9 +287,22 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
     setAttendanceStep('result');
   };
 
+  const handleSetPrivacy = (minutes: number) => {
+      const endTime = Date.now() + minutes * 60 * 1000;
+      setCameraOffEndTime(endTime);
+      if (onSetCameraStatus) onSetCameraStatus(true);
+      resetInactivityTimer();
+  };
+
+  const handleClearPrivacy = () => {
+      setCameraOffEndTime(null);
+      if (onSetCameraStatus) onSetCameraStatus(false);
+      resetInactivityTimer();
+  };
+
   // --- Render Call Widget (Smaller Buttons for Sidebar) ---
   const renderCallWidget = () => {
-      // Reduced size: w-28 h-24 (approx half area of previous w-44 h-44)
+      // Reduced size: w-28 h-24
       const buttonBaseClass = "w-28 h-24 rounded-xl flex flex-col items-center justify-center gap-1 shadow-xl transition-all active:scale-95 border-2";
       const iconClass = "w-8 h-8";
       const textClass = "font-bold text-sm leading-tight text-center px-1";
@@ -334,6 +392,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
       {showAttendanceModal && (
         <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
             <div className="bg-slate-900 border border-slate-700 w-full max-w-md rounded-2xl p-6 shadow-2xl relative">
+                {/* ... existing modal content ... */}
                 <button 
                     onClick={() => { setShowAttendanceModal(false); resetInactivityTimer(); }}
                     className="absolute top-4 right-4 text-slate-400 hover:text-white"
@@ -364,7 +423,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                         </button>
                     </div>
                 )}
-
+                {/* ... rest of attendance logic ... */}
                 {attendanceStep === 'input' && (
                     <div className="space-y-6">
                          <div className={`text-center py-2 rounded font-bold text-white ${attendanceType === 'start' ? 'bg-blue-600/50' : 'bg-orange-600/50'}`}>
@@ -467,7 +526,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
       <div className="flex-1 flex overflow-hidden">
         {/* SIDEBAR: Controls (Narrower width: w-32) */}
         <div className="w-32 bg-slate-900 border-r border-slate-800 flex flex-col pt-6 items-center gap-6 shrink-0 z-40 overflow-y-auto pb-4">
-             {/* 1. Entry/Exit Button (Reduced Size: w-28 h-24) */}
+             {/* 1. Entry/Exit Button */}
              <button 
                 onClick={() => {
                     setShowAttendanceModal(true);
@@ -486,83 +545,109 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                 <span className="text-lg font-bold">入退場</span>
             </button>
 
-            {/* 2. Call Widget (Sized to match) */}
+            {/* 2. Call Widget */}
             {renderCallWidget()}
+
+            {/* 3. Camera Off (Privacy) Widget */}
+            <div className="w-28 flex flex-col gap-2 mt-4 border-t border-slate-800 pt-4">
+                {cameraOffEndTime ? (
+                    <div className="w-full bg-red-900/30 border border-red-500/50 rounded-xl p-2 text-center animate-pulse">
+                         <div className="text-xs text-red-400 font-bold mb-1">カメラ停止中</div>
+                         <div className="text-xl font-mono text-white font-bold mb-2">{remainingTime}</div>
+                         <button 
+                            onClick={handleClearPrivacy}
+                            className="w-full py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded"
+                         >
+                            解除
+                         </button>
+                    </div>
+                ) : (
+                    <div className="w-full bg-slate-800 rounded-xl p-2 border border-slate-700">
+                         <div className="text-[10px] text-slate-400 font-bold text-center mb-2">カメラ一時停止</div>
+                         <div className="grid grid-cols-1 gap-2">
+                             {[10, 30, 60].map(min => (
+                                 <button
+                                    key={min}
+                                    onClick={() => handleSetPrivacy(min)}
+                                    className="w-full py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white text-xs font-bold rounded border border-slate-600"
+                                 >
+                                     {min}分 オフ
+                                 </button>
+                             ))}
+                         </div>
+                    </div>
+                )}
+            </div>
         </div>
 
-        {/* Main Content Area */}
-        <div className="flex-1 flex relative bg-black min-w-0">
+        {/* Main Content Area (Merged) */}
+        <div className="flex-1 relative bg-black min-w-0">
              
-             {/* 1. CHAT INTERFACE (Left/Center) - Taking priority and space next to buttons */}
-             <div className="flex-1 border-r border-slate-800 bg-slate-900 flex flex-col min-w-0">
-                 <ChatInterface 
-                    messages={messages} 
-                    onSendMessage={onSendMessage} 
-                    userName={userName}
-                    onMarkRead={onMarkRead}
-                    userRole={userRole}
-                    onDeleteMessage={onDeleteMessage} 
-                    chatTitle={`${siteId} 現場チャット`}
-                    largeMode={true}
-                 />
-             </div>
+             {/* 1. CHAT INTERFACE (Takes FULL Space when no screen share) */}
+             {!adminStream && (
+                 <div className="absolute inset-0 z-10 bg-slate-900">
+                     <ChatInterface 
+                        messages={messages} 
+                        onSendMessage={onSendMessage} 
+                        userName={userName}
+                        onMarkRead={onMarkRead}
+                        userRole={userRole}
+                        onDeleteMessage={onDeleteMessage} 
+                        chatTitle={`${siteId} 現場チャット`}
+                        largeMode={true}
+                     />
+                 </div>
+             )}
 
-             {/* 2. VIDEO AREA (Right) - Reduced width to 40% */}
-             <div className="w-[40%] relative bg-black flex items-center justify-center">
-                
-                {/* 1. Admin Video (Screen Share) - MAIN BACKGROUND LAYER */}
-                <video 
-                    ref={adminVideoRef} 
-                    autoPlay 
-                    playsInline 
-                    className={`absolute inset-0 w-full h-full z-0 bg-black transition-opacity duration-300 ${
-                        adminStream ? 'opacity-100' : 'opacity-0'
-                    }`}
-                    style={{ objectFit: 'contain' }}
-                />
+             {/* 2. ADMIN VIDEO (Screen Share - Takes FULL Space when active) */}
+             {adminStream && (
+                 <div className="absolute inset-0 z-10 bg-black flex items-center justify-center">
+                    <video 
+                        ref={adminVideoRef} 
+                        autoPlay 
+                        playsInline 
+                        className="w-full h-full object-contain"
+                    />
+                 </div>
+             )}
 
-                {/* 2. Local Camera (Field) */}
-                {callStatus === 'connected' && (
-                    <div 
-                        className={`transition-all duration-500 ease-in-out z-10 ${
-                            adminStream 
-                            ? 'absolute bottom-4 right-4 w-32 aspect-video rounded-lg overflow-hidden border-2 border-slate-600 shadow-2xl' 
-                            : 'absolute inset-0 w-full h-full'
-                        }`}
-                    >
-                        <video 
-                            ref={videoRef} 
-                            autoPlay 
-                            playsInline 
-                            muted 
-                            className="w-full h-full object-cover"
-                        />
-                        {adminStream && (
-                            <div className="absolute bottom-0 left-0 w-full bg-black/60 text-white text-[10px] text-center py-0.5 backdrop-blur-sm">
-                                自分
-                            </div>
-                        )}
-                    </div>
-                )}
-                
-                {/* Visual Alert Overlay (Calling) */}
-                {(incomingAlert || callStatus === 'incoming') && (
-                    <div className="absolute inset-0 z-50 pointer-events-none border-[8px] border-blue-500/80 animate-pulse flex items-center justify-center bg-blue-900/20">
-                        <div className="bg-blue-600 text-white font-black text-2xl px-6 py-6 rounded-2xl shadow-2xl animate-bounce tracking-widest border-4 border-white flex flex-col items-center gap-2">
-                            <span className="text-4xl">🔔</span>
-                            <span>呼出し</span>
-                        </div>
-                    </div>
-                )}
-                
-                {/* Placeholder if no video */}
-                {!adminStream && callStatus !== 'connected' && (
-                    <div className="text-slate-700 flex flex-col items-center">
-                        <svg className="w-16 h-16 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                        <span className="text-xs mt-2 opacity-50">Video Area</span>
-                    </div>
-                )}
-             </div>
+             {/* 3. LOCAL CAMERA (PiP - Always floating on bottom right) */}
+             {callStatus === 'connected' && !cameraOffEndTime && (
+                 <div className="absolute bottom-4 right-4 w-48 aspect-video rounded-lg overflow-hidden border-2 border-slate-600 shadow-2xl z-20 bg-black">
+                     <video 
+                         ref={videoRef} 
+                         autoPlay 
+                         playsInline 
+                         muted 
+                         className="w-full h-full object-cover"
+                     />
+                     {adminStream && (
+                         <div className="absolute bottom-0 left-0 w-full bg-black/60 text-white text-[10px] text-center py-0.5 backdrop-blur-sm">
+                             自分
+                         </div>
+                     )}
+                 </div>
+             )}
+             
+             {/* 4. Privacy Mode Overlay (In PiP location if active) */}
+             {cameraOffEndTime && (
+                 <div className="absolute bottom-4 right-4 w-48 aspect-video rounded-lg overflow-hidden border-2 border-red-900/50 shadow-2xl z-20 bg-black/80 flex flex-col items-center justify-center">
+                     <svg className="w-8 h-8 text-slate-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                     </svg>
+                     <span className="text-xs text-slate-400">カメラ停止中</span>
+                 </div>
+             )}
+
+             {/* 5. Incoming Alert Overlay */}
+             {(incomingAlert || callStatus === 'incoming') && (
+                 <div className="absolute inset-0 z-50 pointer-events-none border-[8px] border-blue-500/80 animate-pulse flex items-center justify-center bg-blue-900/20">
+                     <div className="bg-blue-600 text-white font-black text-2xl px-6 py-6 rounded-2xl shadow-2xl animate-bounce tracking-widest border-4 border-white flex flex-col items-center gap-2">
+                         <span className="text-4xl">🔔</span>
+                         <span>呼出し</span>
+                     </div>
+                 </div>
+             )}
         </div>
       </div>
     </div>
