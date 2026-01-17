@@ -22,6 +22,7 @@ interface FieldDashboardProps {
   userRole: UserRole;
   onDeleteMessage?: (id: string) => void;
   onSetCameraStatus?: (isOff: boolean) => void;
+  alertVolume?: number; // New prop for alert volume
 }
 
 const FieldDashboard: React.FC<FieldDashboardProps> = ({ 
@@ -41,7 +42,8 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   onMarkRead,
   userRole,
   onDeleteMessage,
-  onSetCameraStatus
+  onSetCameraStatus,
+  alertVolume = 1.0 // Default volume
 }) => {
   const [ecoMode, setEcoMode] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -258,9 +260,12 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
               gain.connect(ctx.destination);
               osc.type = 'sine';
               osc.frequency.setValueAtTime(freq, time);
+              
+              // Apply dynamic volume
               gain.gain.setValueAtTime(0, time);
-              gain.gain.linearRampToValueAtTime(0.5, time + 0.05);
+              gain.gain.linearRampToValueAtTime(alertVolume, time + 0.05); // Use prop volume
               gain.gain.exponentialRampToValueAtTime(0.01, time + duration);
+              
               osc.start(time);
               osc.stop(time + duration);
           };
@@ -274,7 +279,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
         console.error("Audio playback failed", e);
       }
     }
-  }, [incomingAlert, callStatus, ecoMode]);
+  }, [incomingAlert, callStatus, ecoMode, alertVolume]);
 
   // Attendance Logic
   useEffect(() => {

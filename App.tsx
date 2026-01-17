@@ -20,6 +20,7 @@ const App: React.FC = () => {
 
   const [incomingAlert, setIncomingAlert] = useState(false);
   const [isFieldCameraOff, setIsFieldCameraOff] = useState(false); // New state for Camera Off message
+  const [fieldAlertVolume, setFieldAlertVolume] = useState<number>(1.0); // State for Alert Volume on Field device
   
   // Sites Management (For Admin)
   const [sites, setSites] = useState<Site[]>([]);
@@ -210,9 +211,15 @@ const App: React.FC = () => {
         setCallStatus('connected');
     } else if (type === 'CALL_END') {
         setCallStatus('idle');
+    } else if (type === 'STREAM_STOP') {
+        // [Field Side] Admin stopped stream (screen share or camera)
+        setRemoteStream(null);
     } else if (type === 'CAMERA_STATUS') {
         // [Admin Side] Received camera status update from Field
         setIsFieldCameraOff(payload.isOff);
+    } else if (type === 'SET_VOLUME') {
+        // [Field Side] Received volume setting from Admin
+        setFieldAlertVolume(payload.volume);
     } else if (type === 'RELAY_REQUEST') {
         // [Field Side] Admin requested a camera image relay
         // Payload: { cameraId, url }
@@ -453,10 +460,16 @@ const App: React.FC = () => {
           mediaConnRef.current = null;
       }
       setLocalStream(stream);
+      
       if (stream && peerRef.current) {
           const targetId = siteId;
           const call = peerRef.current.call(targetId, stream);
           mediaConnRef.current = call;
+      } else {
+          // Explicitly signal stream stop
+          if (connRef.current && connRef.current.open) {
+              connRef.current.send({ type: 'STREAM_STOP' });
+          }
       }
   }, [localStream, siteId]);
 
@@ -512,6 +525,16 @@ const App: React.FC = () => {
       }
   };
 
+  // --- Remote Volume Control Handling ---
+  const handleSetRemoteVolume = (volume: number) => {
+      if (connRef.current && connRef.current.open) {
+          connRef.current.send({ 
+              type: 'SET_VOLUME', 
+              payload: { volume } 
+          });
+      }
+  };
+
   // --- UI Actions ---
   const handleLogin = (role: UserRole, id: string, name: string, initialSites?: Site[]) => {
     setSiteId(id);
@@ -525,6 +548,7 @@ const App: React.FC = () => {
       setRelayImages({}); 
       setRelayErrors({});
       setIsFieldCameraOff(false); // Reset when switching sites
+      setFieldAlertVolume(1.0); // Reset volume expectation
   };
 
   const handleAddSite = async (newSite: Site) => {
@@ -645,7 +669,8 @@ const App: React.FC = () => {
         onDeleteMessage={handleDeleteMessage}
         unreadSites={Array.from(unreadSites)} // Pass unread sites as array
         isFieldCameraOff={isFieldCameraOff} // Pass Camera Off status
-        onBroadcastMessage={handleBroadcastMessage} // New Prop
+        onBroadcastMessage={handleBroadcastMessage} 
+        onSetRemoteVolume={handleSetRemoteVolume} // Pass volume handler
       />
     );
   }
@@ -670,7 +695,8 @@ const App: React.FC = () => {
       onMarkRead={handleMarkRead}
       userRole={currentRole}
       onDeleteMessage={handleDeleteMessage}
-      onSetCameraStatus={handleSetCameraStatus} // Pass handler
+      onSetCameraStatus={handleSetCameraStatus}
+      alertVolume={fieldAlertVolume} // Pass volume state
     />
   );
 };
