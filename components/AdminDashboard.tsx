@@ -29,6 +29,7 @@ interface AdminDashboardProps {
   onDeleteMessage?: (id: string) => void; // New prop
   unreadSites?: string[]; // New prop: List of site IDs with unread messages
   isFieldCameraOff?: boolean; // New prop for camera status
+  onBroadcastMessage?: (targetSiteIds: string[], text: string, isNotice: boolean) => void; // New prop
 }
 
 // Annotation types
@@ -190,7 +191,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
     relayErrors,
     onDeleteMessage,
     unreadSites = [],
-    isFieldCameraOff = false
+    isFieldCameraOff = false,
+    onBroadcastMessage
 }) => {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -214,6 +216,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [newCamera, setNewCamera] = useState<Partial<CameraConfig>>({ type: 'mjpeg', refreshInterval: 1000, isRelay: false });
   const [showAddSiteModal, setShowAddSiteModal] = useState(false);
   const [newSiteForm, setNewSiteForm] = useState({ id: '', name: '' });
+
+  // --- Broadcast / Multiple Selection State ---
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedSites, setSelectedSites] = useState<Set<string>>(new Set());
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+  const [broadcastText, setBroadcastText] = useState('');
+  const [isUrgentNotice, setIsUrgentNotice] = useState(false);
 
 
   // --- Fetch Cameras from Supabase ---
@@ -241,7 +250,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 name: c.name,
                 type: c.type,
                 url: c.url,
-                refreshInterval: c.refresh_interval,
+                refresh_interval: c.refresh_interval,
                 isRelay: c.is_relay,
             }));
             setCameras(mappedCameras);
@@ -577,6 +586,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Helper to get site name
   const currentSiteName = sites.find(s => s.id === siteId)?.name || '';
 
+  // --- Broadcast Logic ---
+  const toggleSiteSelection = (id: string) => {
+      setSelectedSites(prev => {
+          const next = new Set(prev);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          return next;
+      });
+  };
+
+  const handleBroadcastSubmit = () => {
+      if (!broadcastText.trim() || selectedSites.size === 0) return;
+      if (onBroadcastMessage) {
+          onBroadcastMessage(Array.from(selectedSites), broadcastText, isUrgentNotice);
+          setShowBroadcastModal(false);
+          setBroadcastText('');
+          setIsUrgentNotice(false);
+          setIsSelectionMode(false);
+          setSelectedSites(new Set());
+      }
+  };
+
   return (
     <div className="h-screen flex flex-col bg-slate-950">
       {/* Header */}
@@ -627,7 +658,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
                 }`}
              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                 {isScreenSharing ? '共有停止' : '画面共有'}
              </button>
 
@@ -646,47 +677,99 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <div className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 z-20">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
                 <h2 className="text-slate-400 font-bold text-sm uppercase tracking-wider">登録現場リスト</h2>
-                <button 
-                    onClick={() => setShowAddSiteModal(true)}
-                    className="text-blue-400 hover:text-white bg-blue-900/30 hover:bg-blue-600 rounded p-1"
-                >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                </button>
+                <div className="flex gap-1">
+                    <button 
+                        onClick={() => {
+                            setIsSelectionMode(!isSelectionMode);
+                            setSelectedSites(new Set());
+                        }}
+                        className={`p-1 rounded transition-colors ${isSelectionMode ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                        title="一斉連絡モード"
+                    >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    </button>
+                    <button 
+                        onClick={() => setShowAddSiteModal(true)}
+                        className="text-blue-400 hover:text-white bg-blue-900/30 hover:bg-blue-600 rounded p-1"
+                    >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                    </button>
+                </div>
             </div>
+            
+            {/* Selection Mode Indicator */}
+            {isSelectionMode && (
+                <div className="px-4 py-2 bg-orange-900/30 border-b border-orange-500/30 text-orange-300 text-xs font-bold text-center animate-in slide-in-from-top-2">
+                    一斉連絡モード
+                </div>
+            )}
+
             <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
                 {sites.length === 0 && (
                     <div className="text-center text-slate-600 text-xs py-4">現場が登録されていません</div>
                 )}
                 {sites.map(site => (
-                    <button
-                        key={site.id}
-                        onClick={() => onSwitchSite(site.id)}
-                        className={`w-full text-left p-3 rounded-lg border transition-all duration-200 relative ${
-                            siteId === site.id 
-                            ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.6)] scale-105 z-10 border-blue-400 ring-1 ring-blue-300' 
-                            : 'bg-slate-800/50 border-slate-700 hover:bg-slate-800 hover:border-slate-600 text-slate-400'
-                        }`}
-                    >
-                        <div className={`font-bold ${siteId === site.id ? 'text-white' : 'text-slate-300'}`}>{site.name}</div>
-                        <div className={`text-xs mt-1 flex justify-between ${siteId === site.id ? 'text-blue-100' : 'text-slate-500'}`}>
-                            <span>{site.id}</span>
-                            {siteId === site.id && <span className="text-green-300 animate-pulse font-bold">● 接続中</span>}
-                        </div>
-                        {/* UNREAD INDICATOR */}
-                        {unreadSites.includes(site.id) && (
-                            <div className="absolute -top-1 -right-1 z-20">
-                                <span className="relative flex h-3 w-3">
-                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                                  <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
-                                </span>
-                                <div className="absolute top-4 right-0 bg-yellow-500 text-slate-900 text-[9px] font-black px-1.5 py-0.5 rounded border-2 border-slate-900 whitespace-nowrap shadow-lg animate-pulse">
-                                    未読メッセージあり
-                                </div>
-                            </div>
+                    <div key={site.id} className="relative flex items-center">
+                        {isSelectionMode && (
+                             <input 
+                                type="checkbox"
+                                checked={selectedSites.has(site.id)}
+                                onChange={() => toggleSiteSelection(site.id)}
+                                className="absolute left-2 z-30 w-5 h-5 accent-orange-500 cursor-pointer"
+                             />
                         )}
-                    </button>
+                        <button
+                            onClick={() => {
+                                if (isSelectionMode) toggleSiteSelection(site.id);
+                                else onSwitchSite(site.id);
+                            }}
+                            className={`w-full text-left p-3 rounded-lg border transition-all duration-200 relative ${isSelectionMode ? 'pl-10' : ''} ${
+                                siteId === site.id && !isSelectionMode
+                                ? 'bg-blue-600 text-white shadow-[0_0_20px_rgba(37,99,235,0.6)] scale-105 z-10 border-blue-400 ring-1 ring-blue-300' 
+                                : selectedSites.has(site.id)
+                                    ? 'bg-orange-900/40 border-orange-500 text-white'
+                                    : 'bg-slate-800/50 border-slate-700 hover:bg-slate-800 hover:border-slate-600 text-slate-400'
+                            }`}
+                        >
+                            <div className={`font-bold ${siteId === site.id || selectedSites.has(site.id) ? 'text-white' : 'text-slate-300'}`}>{site.name}</div>
+                            <div className={`text-xs mt-1 flex justify-between ${siteId === site.id ? 'text-blue-100' : 'text-slate-500'}`}>
+                                <span>{site.id}</span>
+                                {siteId === site.id && !isSelectionMode && <span className="text-green-300 animate-pulse font-bold">● 接続中</span>}
+                            </div>
+                            {/* UNREAD INDICATOR */}
+                            {!isSelectionMode && unreadSites.includes(site.id) && (
+                                <div className="absolute -top-1 -right-1 z-20">
+                                    <span className="relative flex h-3 w-3">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
+                                    </span>
+                                    <div className="absolute top-4 right-0 bg-yellow-500 text-slate-900 text-[9px] font-black px-1.5 py-0.5 rounded border-2 border-slate-900 whitespace-nowrap shadow-lg animate-pulse">
+                                        未読メッセージあり
+                                    </div>
+                                </div>
+                            )}
+                        </button>
+                    </div>
                 ))}
             </div>
+
+            {/* Broadcast Action Button */}
+            {isSelectionMode && (
+                <div className="p-4 border-t border-slate-800 bg-slate-900">
+                    <div className="text-xs text-center text-slate-400 mb-2">{selectedSites.size}件 選択中</div>
+                    <button 
+                        onClick={() => setShowBroadcastModal(true)}
+                        disabled={selectedSites.size === 0}
+                        className={`w-full py-3 rounded-lg font-bold text-white shadow-lg transition-all ${
+                            selectedSites.size > 0 
+                            ? 'bg-orange-600 hover:bg-orange-500' 
+                            : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                        }`}
+                    >
+                        メッセージを作成
+                    </button>
+                </div>
+            )}
         </div>
 
         {/* Main Content Area (Video + Cameras) */}
@@ -835,6 +918,50 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
           />
         </div>
         {/* Modals ... (Rest of code is unchanged) */}
+        {/* Broadcast Modal */}
+        {showBroadcastModal && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
+                <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl">
+                    <h2 className="text-xl font-bold text-white mb-2">一斉送信 ({selectedSites.size}件)</h2>
+                    <p className="text-sm text-slate-400 mb-4">選択した現場すべてに同じメッセージを送信します。</p>
+                    
+                    <textarea 
+                        className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-white focus:outline-none focus:border-orange-500 min-h-[120px]"
+                        placeholder="送信する内容を入力してください..."
+                        value={broadcastText}
+                        onChange={(e) => setBroadcastText(e.target.value)}
+                    />
+
+                    <label className="flex items-start gap-3 mt-4 p-3 bg-red-900/20 border border-red-900/50 rounded-lg cursor-pointer hover:bg-red-900/30 transition-colors">
+                        <input 
+                            type="checkbox" 
+                            checked={isUrgentNotice} 
+                            onChange={(e) => setIsUrgentNotice(e.target.checked)}
+                            className="w-5 h-5 mt-0.5 accent-red-500"
+                        />
+                        <div>
+                            <div className="text-white font-bold text-sm">【共通連絡事項】として強調表示する</div>
+                            <div className="text-slate-400 text-xs mt-1">
+                                現場のiPad画面に全画面の警告モーダルを表示し、見落としを防ぎます。<br/>
+                                (例：台風対策、緊急の安全指示など)
+                            </div>
+                        </div>
+                    </label>
+
+                    <div className="flex justify-end gap-3 mt-6">
+                        <button onClick={() => setShowBroadcastModal(false)} className="px-4 py-2 text-slate-400 hover:text-white font-bold">キャンセル</button>
+                        <button 
+                            onClick={handleBroadcastSubmit} 
+                            disabled={!broadcastText.trim()} 
+                            className={`px-6 py-2 rounded font-bold text-white ${!broadcastText.trim() ? 'bg-slate-700 cursor-not-allowed' : 'bg-orange-600 hover:bg-orange-500'}`}
+                        >
+                            送信する
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* Add Camera Modal */}
         {showCameraModal && (
             <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">

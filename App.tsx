@@ -553,6 +553,25 @@ const App: React.FC = () => {
     }
   };
 
+  const handleBroadcastMessage = async (targetSiteIds: string[], text: string, isNotice: boolean) => {
+      const messagesToInsert = targetSiteIds.map(sid => ({
+          site_id: sid,
+          sender: userName,
+          text: isNotice ? `【共通連絡事項】\n${text}` : text,
+          is_read: false,
+          created_at: new Date().toISOString()
+      }));
+
+      const { error } = await supabase.from('messages').insert(messagesToInsert);
+      
+      if (error) {
+          console.error("Error broadcasting messages", error);
+          alert("一斉送信に失敗しました");
+      } else {
+          alert(`${targetSiteIds.length}件の現場へ送信しました`);
+      }
+  };
+
   const handleDeleteMessage = async (id: string) => {
      setMessages(prev => prev.filter(m => m.id !== id));
      const { error } = await supabase.from('messages').delete().eq('id', id);
@@ -626,6 +645,7 @@ const App: React.FC = () => {
         onDeleteMessage={handleDeleteMessage}
         unreadSites={Array.from(unreadSites)} // Pass unread sites as array
         isFieldCameraOff={isFieldCameraOff} // Pass Camera Off status
+        onBroadcastMessage={handleBroadcastMessage} // New Prop
       />
     );
   }

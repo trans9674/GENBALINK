@@ -63,6 +63,9 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   const [workerName, setWorkerName] = useState('');
   const [currentTime, setCurrentTime] = useState('');
 
+  // Urgent Notice State
+  const [urgentNotice, setUrgentNotice] = useState<string | null>(null);
+
   // --- Auto Eco Mode Logic ---
   const resetInactivityTimer = useCallback(() => {
     if (ecoMode) setEcoMode(false);
@@ -100,6 +103,21 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
         }
     }
   }, [messages.length, incomingAlert, callStatus, resetInactivityTimer]);
+
+  // --- Watch for Urgent Notices ---
+  useEffect(() => {
+      // Check the last received message. If it starts with the tag and is recent (naive check), show modal.
+      if (messages.length > 0) {
+          const lastMsg = messages[messages.length - 1];
+          // We only show it if it's not from self (Admin sent it) and starts with the tag
+          if (lastMsg.sender !== userName && lastMsg.text.startsWith('【共通連絡事項】')) {
+              // Simple deduping: if content is same as current notice, don't re-trigger animation?
+              // Actually, simply setting it is fine.
+              setUrgentNotice(lastMsg.text.replace('【共通連絡事項】', '').trim());
+              resetInactivityTimer(); // Wake up screen
+          }
+      }
+  }, [messages, userName, resetInactivityTimer]);
 
 
   // Handle Wake Lock
@@ -395,6 +413,34 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
 
   return (
     <div className="h-screen flex flex-col bg-slate-950 relative">
+      {/* Urgent Notice Modal */}
+      {urgentNotice && (
+          <div className="absolute inset-0 z-[100] bg-red-950/90 flex flex-col items-center justify-center p-8 backdrop-blur animate-in fade-in zoom-in duration-300">
+              <div className="w-full max-w-2xl bg-slate-900 border-2 border-red-500 rounded-3xl p-8 shadow-2xl flex flex-col items-center text-center relative overflow-hidden">
+                   {/* Background Pulse Effect */}
+                   <div className="absolute top-0 left-0 w-full h-2 bg-red-500 animate-pulse"></div>
+                   
+                   <div className="w-20 h-20 bg-red-600 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-red-900/50 animate-bounce">
+                        <svg className="w-10 h-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                   </div>
+
+                   <h2 className="text-3xl font-black text-red-500 tracking-widest mb-2">共通連絡事項</h2>
+                   <div className="w-16 h-1 bg-red-500/50 rounded-full mb-6"></div>
+
+                   <p className="text-2xl md:text-4xl font-bold text-white leading-relaxed mb-8 whitespace-pre-wrap">
+                       {urgentNotice}
+                   </p>
+
+                   <button 
+                      onClick={() => { setUrgentNotice(null); resetInactivityTimer(); }}
+                      className="bg-white hover:bg-slate-200 text-slate-900 font-black text-xl px-12 py-4 rounded-xl shadow-xl transition-transform active:scale-95"
+                   >
+                       確認しました
+                   </button>
+              </div>
+          </div>
+      )}
+
       {/* Attendance Modal (Unchanged) */}
       {showAttendanceModal && (
         <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
