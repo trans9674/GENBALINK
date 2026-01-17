@@ -109,7 +109,11 @@ const App: React.FC = () => {
                      msg.id === payload.new.id ? { ...msg, isRead: payload.new.is_read } : msg
                  ));
              } else if (payload.eventType === 'DELETE') {
-                 setMessages(prev => prev.filter(msg => msg.id !== payload.old.id));
+                 // Supabase Realtime sends `old` with PK on delete
+                 const deletedId = payload.old.id;
+                 if (deletedId) {
+                     setMessages(prev => prev.filter(msg => msg.id !== deletedId));
+                 }
              }
         })
         .subscribe();
@@ -485,9 +489,17 @@ const App: React.FC = () => {
   };
 
   const handleDeleteMessage = async (id: string) => {
-     // Delete from Supabase
+     // 1. Optimistic Update: Remove locally immediately for better UX
+     setMessages(prev => prev.filter(m => m.id !== id));
+
+     // 2. Delete from Supabase
      const { error } = await supabase.from('messages').delete().eq('id', id);
-     if (error) console.error("Error deleting message", error);
+     
+     if (error) {
+         console.error("Error deleting message", error);
+         // If error, you might want to fetch messages again to restore state
+         // but for now we just log it.
+     }
   };
 
   const handleMarkRead = async (messageId: string) => {

@@ -72,10 +72,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const handlePressStart = (id: string, isMe: boolean) => {
       if (!isMe || !onDeleteMessage) return;
       
+      // Clear any existing timer
+      if (pressTimer.current) clearTimeout(pressTimer.current);
+
       pressTimer.current = setTimeout(() => {
-          if (window.confirm("このメッセージを削除しますか？")) {
-              onDeleteMessage(id);
-          }
+          // Use a slight timeout to allow UI to clear touch state before alert
+          setTimeout(() => {
+            if (window.confirm("このメッセージを削除しますか？")) {
+                onDeleteMessage(id);
+            }
+          }, 10);
       }, 800); // 800ms threshold
   };
 
@@ -149,6 +155,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     onMouseLeave={handlePressEnd}
                     onTouchStart={() => handlePressStart(msg.id, isMe)}
                     onTouchEnd={handlePressEnd}
+                    onTouchMove={handlePressEnd} // Cancel on scroll
+                    onContextMenu={(e) => e.preventDefault()} // Prevent native context menu
                     className={`relative max-w-[85%] rounded-lg p-3 text-base transition-all cursor-pointer select-none ${
                       isMe 
                         ? 'bg-blue-600 text-white' 
