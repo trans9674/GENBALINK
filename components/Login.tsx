@@ -57,6 +57,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [isSysAdminAuthenticated, setIsSysAdminAuthenticated] = useState(false);
   const [sysAdminTab, setSysAdminTab] = useState<'users' | 'sites'>('users');
   
+  // Guide Modal State
+  const [showGuide, setShowGuide] = useState(false);
+  
   // Data for System Admin
   const [allUsers, setAllUsers] = useState<{name: string, password: string}[]>([]);
   const [sitePasswords, setSitePasswords] = useState<Record<string, string>>({});
@@ -95,8 +98,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     let changed = false;
     SEED_USERS.forEach(seedName => {
         if (!currentUsers.some((u: any) => u.name === seedName)) {
-            // Default password for seeded users is 'password' or similar. 
-            // The prompt says "Set username and password yourself", but for seeded users we need a default.
             currentUsers.push({ name: seedName, password: 'password' }); 
             changed = true;
         }
@@ -248,6 +249,17 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 opacity-20 pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600 rounded-full blur-[128px]"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-orange-600 rounded-full blur-[128px]"></div>
+      </div>
+
+      {/* Guide Button */}
+      <div className="absolute top-6 right-6 z-50">
+          <button 
+            onClick={() => setShowGuide(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-800/80 hover:bg-slate-700 text-blue-400 font-bold rounded-full border border-slate-600 transition-all shadow-lg backdrop-blur"
+          >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+              システムガイド
+          </button>
       </div>
 
       <div className="z-10 w-full max-w-md">
@@ -466,6 +478,215 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           GenbaLink v2.1 &bull; Multi-Site Supported
         </div>
       </div>
+
+      {/* --- GUIDE MODAL --- */}
+      {showGuide && (
+        <div className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4 backdrop-blur-md">
+            <div className="bg-slate-900 border border-slate-700 w-full max-w-4xl rounded-2xl shadow-2xl h-[90vh] flex flex-col relative overflow-hidden">
+                {/* Close Button */}
+                <button 
+                    onClick={() => setShowGuide(false)}
+                    className="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full p-2 z-10"
+                >
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+
+                {/* Header */}
+                <div className="bg-slate-800/50 border-b border-slate-700 p-6">
+                    <h2 className="text-2xl font-black text-white flex items-center gap-3">
+                        <span className="text-blue-500 text-3xl">📘</span>
+                        GenbaLink システムガイド
+                    </h2>
+                    <p className="text-slate-400 text-sm mt-1">遠隔現場管理システムの機能と運用ルールについて</p>
+                </div>
+
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
+                    
+                    {/* 1. System Overview */}
+                    <section>
+                        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-l-4 border-blue-500 pl-3">
+                            1. システム概要
+                        </h3>
+                        <p className="text-slate-300 text-sm leading-relaxed mb-4">
+                            GenbaLinkは、管理者が遠隔地から複数の現場状況をリアルタイムに把握し、現場作業者と円滑なコミュニケーションを取るためのシステムです。
+                            PC（管理者）とiPad（現場）を接続し、映像・音声・チャットを用いて現場管理を効率化します。
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col items-center text-center">
+                                 <div className="w-12 h-12 bg-blue-900/50 rounded-full flex items-center justify-center mb-2">
+                                     <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                                 </div>
+                                 <div className="font-bold text-white mb-1">管理者 (PC)</div>
+                                 <p className="text-xs text-slate-400">オフィスから各現場をモニタリング。<br/>システム管理ボタンからログイン可能。</p>
+                             </div>
+                             <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col items-center text-center">
+                                 <div className="w-12 h-12 bg-orange-900/50 rounded-full flex items-center justify-center mb-2">
+                                     <svg className="w-6 h-6 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                                 </div>
+                                 <div className="font-bold text-white mb-1">現場端末 (iPad)</div>
+                                 <p className="text-xs text-slate-400">現場に設置。IDとパスワードで接続。<br/>映像送信と管理者からの指示受信。</p>
+                             </div>
+                        </div>
+                    </section>
+
+                    {/* 2. iPad Operation Rules */}
+                    <section>
+                         <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-l-4 border-orange-500 pl-3">
+                            2. 現場iPadの運用ルール
+                        </h3>
+                        <div className="bg-slate-800/50 rounded-xl p-5 border border-slate-700 space-y-4">
+                            <div className="flex items-start gap-3">
+                                <div className="p-2 bg-yellow-900/30 rounded text-yellow-500"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg></div>
+                                <div>
+                                    <div className="font-bold text-white">電源は常時接続</div>
+                                    <p className="text-xs text-slate-400">バッテリー切れを防ぐため、常に充電ケーブルを接続した状態で運用してください。</p>
+                                </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                                <div className="p-2 bg-blue-900/30 rounded text-blue-500"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg></div>
+                                <div>
+                                    <div className="font-bold text-white">自動ロックは「なし」</div>
+                                    <p className="text-xs text-slate-400">設定アプリ＞画面表示と明るさ＞自動ロック を「なし」に設定し、常に画面が点灯した状態を維持してください。</p>
+                                </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                                <div className="p-2 bg-red-900/30 rounded text-red-500"><svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg></div>
+                                <div>
+                                    <div className="font-bold text-white">動画録画は行わない</div>
+                                    <p className="text-xs text-slate-400">データ通信量とストレージ容量を節約するため、システム側での自動録画機能はありません。必要に応じてスクリーンショットを活用してください。</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* 3. Camera Setup */}
+                    <section>
+                        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-l-4 border-green-500 pl-3">
+                            3. カメラ構成・設置
+                        </h3>
+                         <div className="flex flex-col md:flex-row gap-6 items-center">
+                             <div className="flex-1 space-y-4">
+                                 <p className="text-sm text-slate-300">
+                                     標準的な現場では、合計3台のカメラを設置して死角をなくします。
+                                     iPad内蔵カメラに加え、外部設置のネットワークカメラを活用します。
+                                 </p>
+                                 <ul className="space-y-2 text-sm">
+                                     <li className="flex items-center gap-2">
+                                         <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                                         <span className="font-bold text-white">屋外カメラ (1台)</span>: 外観、資材置き場、侵入監視用
+                                     </li>
+                                     <li className="flex items-center gap-2">
+                                         <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                                         <span className="font-bold text-white">屋内カメラ (2台)</span>: 主要な作業エリア、内装状況用
+                                     </li>
+                                     <li className="flex items-center gap-2">
+                                         <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                                         <span className="font-bold text-white">iPadカメラ</span>: 作業者との対話、手元の詳細確認用
+                                     </li>
+                                 </ul>
+                             </div>
+                             <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 w-full md:w-64 flex flex-col items-center">
+                                 {/* Simple House Illustration */}
+                                 <svg viewBox="0 0 100 80" className="w-32 h-24 text-slate-500 mb-2">
+                                     <path d="M50 5 L90 35 L80 35 L80 75 L20 75 L20 35 L10 35 Z" fill="none" stroke="currentColor" strokeWidth="2" />
+                                     <rect x="35" y="45" width="30" height="30" fill="currentColor" opacity="0.2" />
+                                     {/* Cameras */}
+                                     <circle cx="20" cy="35" r="4" fill="#22c55e" />
+                                     <circle cx="50" cy="50" r="4" fill="#22c55e" />
+                                     <circle cx="70" cy="50" r="4" fill="#22c55e" />
+                                 </svg>
+                                 <div className="text-xs text-slate-400 font-bold">設置イメージ (計3台+iPad)</div>
+                             </div>
+                         </div>
+                    </section>
+
+                    {/* 4. Feature Details */}
+                    <section>
+                        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-l-4 border-purple-500 pl-3">
+                            4. 主な機能の使い方
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                                <div className="font-bold text-white mb-2 flex items-center gap-2">
+                                    <span className="text-blue-400">📹</span> ビデオ通話
+                                </div>
+                                <p className="text-xs text-slate-400">
+                                    管理者・現場双方から発信可能。現場の状況を映像で確認しながら会話できます。<br/>
+                                    ※通話中のみiPadカメラが有効になります。
+                                </p>
+                            </div>
+                            <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                                <div className="font-bold text-white mb-2 flex items-center gap-2">
+                                    <span className="text-orange-400">🖥</span> 画面共有・指示
+                                </div>
+                                <p className="text-xs text-slate-400">
+                                    管理者のPC画面をiPadに共有できます。図面を表示してペンツールで書き込みながら、具体的な指示が出せます。
+                                </p>
+                            </div>
+                            <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                                <div className="font-bold text-white mb-2 flex items-center gap-2">
+                                    <span className="text-green-400">💬</span> チャット機能
+                                </div>
+                                <p className="text-xs text-slate-400">
+                                    テキストメッセージのほか、写真やPDF図面を送信できます。<br/>
+                                    メッセージは履歴として残ります。
+                                </p>
+                            </div>
+                            <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                                <div className="font-bold text-white mb-2 flex items-center gap-2">
+                                    <span className="text-red-400">🔔</span> 呼出し・アラート
+                                </div>
+                                <p className="text-xs text-slate-400">
+                                    現場が気づかない場合、管理者から強制的にアラート音を鳴らして呼び出すことができます。
+                                </p>
+                            </div>
+                             <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                                <div className="font-bold text-white mb-2 flex items-center gap-2">
+                                    <span className="text-yellow-400">📢</span> 一斉連絡モード
+                                </div>
+                                <p className="text-xs text-slate-400">
+                                    台風接近時や安全週間の周知など、登録されている全現場に対して同じメッセージを一括送信できます。
+                                </p>
+                            </div>
+                            <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                                <div className="font-bold text-white mb-2 flex items-center gap-2">
+                                    <span className="text-gray-400">🔒</span> カメラOn/Off
+                                </div>
+                                <p className="text-xs text-slate-400">
+                                    現場作業員のプライバシー保護のため、iPad側から一時的にカメラをオフ（10分/30分/60分）に設定できます。
+                                </p>
+                            </div>
+                        </div>
+                    </section>
+
+                     {/* 5. New Site */}
+                     <section>
+                        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-l-4 border-slate-500 pl-3">
+                            5. 新しい現場の追加
+                        </h3>
+                        <p className="text-slate-300 text-sm mb-2">
+                            管理者はログイン後、左サイドバーの「+」ボタンから新しい現場を追加できます。
+                        </p>
+                        <div className="bg-black/30 p-3 rounded text-xs text-slate-400 font-mono">
+                            必要な情報：<br/>
+                            1. 現場名 (例: 佐藤邸新築工事)<br/>
+                            2. 現場ID (例: GENBA-005) ※iPadのログインIDになります
+                        </div>
+                    </section>
+
+                </div>
+                
+                <div className="p-6 border-t border-slate-700 bg-slate-800/80 flex justify-end">
+                    <button 
+                        onClick={() => setShowGuide(false)}
+                        className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-8 rounded-lg shadow-lg transition-all"
+                    >
+                        閉じる
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
 
       {/* --- SYSTEM ADMIN MODAL --- */}
       {showSystemAdmin && (
