@@ -53,6 +53,7 @@ const SurveillanceCamera: React.FC<{
     onDelete: () => void; 
 }> = ({ config, onDelete }) => {
   const [timestamp, setTimestamp] = useState(Date.now());
+  const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
     // Regular refresh for standard cameras
@@ -69,8 +70,10 @@ const SurveillanceCamera: React.FC<{
     ? config.url 
     : `${config.url}${config.url.includes('?') ? '&' : '?'}t=${timestamp}`;
 
+  const isLocalIP = config.url.includes('192.168.') || config.url.includes('10.') || config.url.includes('172.');
+
   return (
-    <div className="relative w-full h-full bg-black group overflow-hidden">
+    <div className="relative w-full h-full bg-black group overflow-hidden border border-slate-800 rounded-lg">
       {config.type === 'iframe' ? (
         <iframe 
           src={srcUrl} 
@@ -78,19 +81,29 @@ const SurveillanceCamera: React.FC<{
           title={config.name}
         />
       ) : (
-        <div className="w-full h-full flex items-center justify-center bg-slate-900">
-            {srcUrl ? (
+        <div className="w-full h-full flex items-center justify-center bg-slate-900 relative">
+            {!hasError ? (
                 <img 
                     src={srcUrl} 
                     alt={config.name}
                     className="w-full h-full object-cover"
-                    onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                    }}
+                    onError={() => setHasError(true)}
                 />
             ) : (
-                <div className="text-center px-4 w-full text-slate-500">
-                    <span className="text-xs">No Signal</span>
+                <div className="text-center px-4 w-full h-full flex flex-col items-center justify-center bg-slate-900 p-4">
+                    <div className="text-yellow-500 mb-2">
+                        <svg className="w-8 h-8 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                    </div>
+                    <span className="text-xs font-bold text-slate-300 block mb-1">接続できません</span>
+                    {isLocalIP && (
+                        <div className="text-[10px] text-slate-400 bg-black/30 p-2 rounded border border-slate-700">
+                            ローカルIP ({config.url.split('/')[2].split(':')[0]}) は<br/>
+                            遠隔地から直接アクセスできません。<br/>
+                            <span className="text-orange-400 font-bold block mt-1">
+                                解決策: iPadの「画面共有」を使用
+                            </span>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -108,10 +121,12 @@ const SurveillanceCamera: React.FC<{
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
       </div>
-      <div className="absolute bottom-2 right-2 flex items-center gap-1 opacity-70 z-10">
-         <div className="w-2 h-2 rounded-full animate-pulse bg-green-500"></div>
-         <span className="text-[10px] text-white shadow-black drop-shadow-md">LIVE</span>
-      </div>
+      {!hasError && (
+        <div className="absolute bottom-2 right-2 flex items-center gap-1 opacity-70 z-10">
+            <div className="w-2 h-2 rounded-full animate-pulse bg-green-500"></div>
+            <span className="text-[10px] text-white shadow-black drop-shadow-md">LIVE</span>
+        </div>
+      )}
     </div>
   );
 };
@@ -120,94 +135,17 @@ const SurveillanceCamera: React.FC<{
 const SystemDiagram = () => (
   <div className="w-full bg-slate-950/50 rounded-xl p-4 border border-slate-700 mt-4 flex flex-col items-center">
     <div className="w-full flex justify-between items-center mb-2 px-2 border-b border-slate-800 pb-2">
-         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">System Topology</span>
-         <span className="text-[10px] text-blue-400 font-bold">接続イメージ図</span>
+         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Network Topology</span>
+         <span className="text-[10px] text-red-400 font-bold">通信の壁について</span>
     </div>
-    <svg viewBox="0 0 420 160" className="w-full h-auto text-slate-300 select-none">
-      <defs>
-        <marker id="arrowhead" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
-          <polygon points="0 0, 6 2, 0 4" fill="#64748b" />
-        </marker>
-        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-           <feGaussianBlur stdDeviation="2" result="blur" />
-           <feComposite in="SourceGraphic" in2="blur" operator="over" />
-        </filter>
-      </defs>
-
-      {/* --- Admin Side (Left) - 3 PCs --- */}
-      <g transform="translate(50, 60)">
-         {/* PC 1 (Back Left) */}
-         <g transform="translate(-20, -15) scale(0.8)">
-            <rect x="-20" y="-15" width="40" height="30" rx="4" fill="#1e3a8a" opacity="0.8" />
-            <path d="M-20 15 L20 15 L25 25 L-25 25 Z" fill="#1e3a8a" opacity="0.5" />
-         </g>
-         {/* PC 2 (Back Right) */}
-         <g transform="translate(20, -15) scale(0.8)">
-            <rect x="-20" y="-15" width="40" height="30" rx="4" fill="#1e3a8a" opacity="0.8" />
-            <path d="M-20 15 L20 15 L25 25 L-25 25 Z" fill="#1e3a8a" opacity="0.5" />
-         </g>
-         {/* PC 3 (Front Center) */}
-         <g transform="translate(0, 5)">
-            <rect x="-20" y="-15" width="40" height="30" rx="4" fill="#3b82f6" opacity="0.9" />
-            <path d="M-20 15 L20 15 L25 25 L-25 25 Z" fill="#3b82f6" opacity="0.6" />
-         </g>
-      </g>
-
-      {/* Connection Line: Admin -> Cloud */}
-      <line x1="90" y1="75" x2="130" y2="75" stroke="#64748b" strokeWidth="2" strokeDasharray="4 2" markerEnd="url(#arrowhead)" />
-
-      {/* --- Cloud (Center) --- */}
-      <g transform="translate(160, 75)">
-        <path d="M-25 0 Q-25 -15 -10 -15 Q0 -25 15 -15 Q30 -25 40 -15 Q55 -15 55 0 Q65 10 55 20 Q55 35 40 35 Q30 45 15 35 Q0 45 -10 35 Q-25 35 -25 20 Q-35 10 -25 0" fill="#475569" transform="translate(-15, -10) scale(0.8)" />
-        <text x="0" y="5" fontSize="9" textAnchor="middle" fill="white" fontWeight="bold">Internet</text>
-        <text x="0" y="35" fontSize="8" textAnchor="middle" fill="#94a3b8">GenbaLink Cloud</text>
-      </g>
-
-      {/* Connection Line: Cloud -> Router */}
-      <line x1="190" y1="75" x2="250" y2="75" stroke="#64748b" strokeWidth="2" strokeDasharray="4 2" markerEnd="url(#arrowhead)" />
-
-      {/* --- Site Area (Right Container) --- */}
-      <rect x="250" y="10" width="160" height="140" rx="8" fill="none" stroke="#eab308" strokeWidth="1" strokeDasharray="4 4" opacity="0.3" />
-      <text x="260" y="25" fontSize="10" fill="#eab308" fontWeight="bold" opacity="0.8">現場 (LAN)</text>
-
-      {/* Router */}
-      <g transform="translate(290, 75)">
-         <rect x="-15" y="-20" width="30" height="40" rx="4" fill="#eab308" opacity="0.9" />
-         <circle cx="0" cy="-10" r="2" fill="white" />
-         <circle cx="0" cy="0" r="2" fill="white" />
-         <circle cx="0" cy="10" r="2" fill="white" />
-         
-         {/* Wifi Waves Right */}
-         <path d="M20 -10 A 15 15 0 0 1 20 10" fill="none" stroke="#eab308" strokeWidth="2" strokeLinecap="round" opacity="0.8" />
-         <path d="M25 -15 A 25 25 0 0 1 25 15" fill="none" stroke="#eab308" strokeWidth="2" strokeLinecap="round" opacity="0.5" />
-         
-         <text x="0" y="32" fontSize="9" textAnchor="middle" fill="#fde047" fontWeight="bold">WiFi</text>
-         <text x="0" y="42" fontSize="8" textAnchor="middle" fill="#fde047" fontWeight="bold">ルーター</text>
-      </g>
-
-      {/* iPad */}
-      <g transform="translate(370, 45)">
-         <rect x="-15" y="-20" width="30" height="40" rx="2" fill="#ef4444" opacity="0.9" />
-         <rect x="-12" y="-17" width="24" height="34" rx="1" fill="#1e293b" />
-         <text x="0" y="30" fontSize="9" textAnchor="middle" fill="#fca5a5" fontWeight="bold">iPad</text>
-      </g>
-      {/* WiFi Connection Router -> iPad */}
-      <path d="M315 65 Q335 65 350 50" fill="none" stroke="#eab308" strokeWidth="1.5" strokeDasharray="2 2" opacity="0.6" />
-
-      {/* Camera */}
-      <g transform="translate(370, 115)">
-         <rect x="-15" y="-10" width="30" height="20" rx="2" fill="#22c55e" opacity="0.9" />
-         <circle cx="0" cy="0" r="6" fill="#0f172a" />
-         <circle cx="0" cy="0" r="3" fill="#22c55e" />
-         <text x="0" y="22" fontSize="9" textAnchor="middle" fill="#86efac" fontWeight="bold">カメラ</text>
-      </g>
-      {/* WiFi Connection Router -> Camera */}
-      <path d="M315 85 Q335 85 350 110" fill="none" stroke="#eab308" strokeWidth="1.5" strokeDasharray="2 2" opacity="0.6" />
-
-    </svg>
-    <div className="text-[9px] text-slate-500 mt-2 px-4 text-center">
-        ※ 全ての機器が同じWiFiルーターに接続されている必要があります。<br/>
-        ※ GenbaLinkはIPアドレス(ローカル)経由でカメラ映像を取得します。
+    <div className="w-full text-xs text-slate-400 space-y-2">
+        <p>ローカルIP (192.168.x.x) は、そのWiFi内でのみ有効な住所です。<br/>インターネット越しのPCからは見えません。</p>
+        <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded text-blue-200">
+            <strong>推奨される運用:</strong><br/>
+            Reolinkカメラの映像を確認したい場合、管理者は現場iPadに対して<br/>
+            <span className="text-orange-400 font-bold">「画面共有」</span>をリクエストしてください。<br/>
+            現場担当者がiPadでReolinkアプリを開くことで、その画面をPCで見ることができます。
+        </div>
     </div>
   </div>
 );
@@ -769,7 +707,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         : 'bg-slate-700 border-slate-600 text-slate-200 hover:bg-slate-600'
                 }`}
              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                 {isScreenSharing ? '共有停止' : '画面共有'}
              </button>
 
@@ -904,7 +842,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                  <div className="flex-1 bg-slate-900 rounded-lg border border-slate-800 overflow-hidden relative flex flex-col">
                     <div className="p-2 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
                         <span className="text-sm font-bold text-orange-400 flex items-center gap-2">
-                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                              画面共有 & 指示モード
                         </span>
                     </div>
@@ -963,7 +901,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div className="bg-slate-900 rounded-lg border border-slate-800 overflow-hidden relative flex flex-col group">
                         <div className="absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-black/60 to-transparent flex justify-between items-start z-10">
                             <span className="text-xs font-bold text-white bg-blue-600/80 px-2 py-0.5 rounded flex items-center gap-2">
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                                 iPad (現場端末)
                             </span>
                             {remoteStream && <span className="text-[10px] text-green-400 bg-green-900/50 px-1.5 py-0.5 rounded border border-green-800 animate-pulse">LIVE</span>}
