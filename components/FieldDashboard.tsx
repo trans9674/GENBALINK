@@ -61,6 +61,9 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
 
   const localStreamRef = useRef<MediaStream | null>(null);
 
+  // Unattended / Monitoring Mode
+  const [isMonitoringMode, setIsMonitoringMode] = useState(false);
+
   // Attendance State
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [attendanceStep, setAttendanceStep] = useState<'menu' | 'input' | 'result'>('menu');
@@ -166,12 +169,13 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
       }
   }, [connectionStatus, cameraOffEndTime, onSetCameraStatus]);
 
-  // Local Camera
+  // Local Camera Control
   const startCamera = async () => {
     if (cameraOffEndTime && Date.now() < cameraOffEndTime) return;
     if (localStreamRef.current) return;
 
     try {
+      console.log("Starting Camera...");
       const stream = await navigator.mediaDevices.getUserMedia({ 
           video: { facingMode: 'user' }, 
           audio: true 
@@ -184,12 +188,16 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
       onStreamReady(stream);
     } catch (e) {
       console.error("Camera failed", e);
-      onEndCall();
+      // Only end call if not in monitoring mode (monitoring mode retries or just waits)
+      if (!isMonitoringMode) onEndCall();
     }
   };
 
   const stopCamera = () => {
+     if (isMonitoringMode) return; // Don't stop if monitoring
+
      if (localStreamRef.current) {
+         console.log("Stopping Camera...");
          localStreamRef.current.getTracks().forEach(track => track.stop());
          localStreamRef.current = null;
          if (videoRef.current) videoRef.current.srcObject = null;
@@ -197,14 +205,37 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
      }
   };
 
+  // Toggle Monitoring Mode
+  const toggleMonitoring = () => {
+      if (isMonitoringMode) {
+          setIsMonitoringMode(false);
+          stopCamera(); // Stop immediately when toggling off
+      } else {
+          setIsMonitoringMode(true);
+          startCamera(); // Start immediately
+      }
+  };
+
+  // Effect to manage camera based on call status and monitoring mode
   useEffect(() => {
       if (cameraOffEndTime) {
-          stopCamera();
+          if (localStreamRef.current) {
+             localStreamRef.current.getTracks().forEach(track => track.stop());
+             localStreamRef.current = null;
+             onStreamReady(null);
+          }
           return;
       }
-      if (callStatus === 'connected') startCamera();
-      else stopCamera();
-  }, [callStatus, cameraOffEndTime]);
+
+      // If monitoring mode is ON, ensure camera is ON
+      if (isMonitoringMode) {
+          if (!localStreamRef.current) startCamera();
+      } else {
+          // If monitoring mode is OFF, only ON during call
+          if (callStatus === 'connected') startCamera();
+          else stopCamera();
+      }
+  }, [callStatus, cameraOffEndTime, isMonitoringMode]);
 
 
   // Handle Admin Stream (CRITICAL for iPad Screen Sharing)
@@ -358,6 +389,9 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
         <div className="text-xl">画面をタッチして復帰</div>
         <div className="mt-8 text-sm text-green-900">{siteId} 監視中</div>
         <div className="mt-2 text-xs text-green-800">通信状態: {connectionStatus}</div>
+        <div className="mt-2 text-xs text-green-700">
+             {isMonitoringMode ? "● 監視待機モード: 有効" : "監視待機モード: 無効"}
+        </div>
         <div className="absolute bottom-10 animate-bounce">
             {(incomingAlert || callStatus === 'incoming') ? "🔔 管理者からの呼出し" : "システム正常"}
         </div>
@@ -442,6 +476,20 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                 <span className="text-lg font-bold">入退場</span>
             </button>
 
+            {/* Monitoring Mode Toggle */}
+            <button 
+                onClick={toggleMonitoring}
+                className={`w-28 h-24 rounded-xl flex flex-col items-center justify-center gap-1 shadow-xl transition-all active:scale-95 border-2 ${
+                    isMonitoringMode 
+                    ? 'bg-purple-600 border-purple-400 text-white animate-pulse' 
+                    : 'bg-slate-800 border-slate-600 text-slate-400 hover:text-white'
+                }`}
+            >
+                <span className="text-2xl">{isMonitoringMode ? '👁' : '🕶'}</span>
+                <span className="font-bold text-[10px]">無人監視</span>
+                <span className="text-[9px] font-mono">{isMonitoringMode ? 'ON' : 'OFF'}</span>
+            </button>
+
             {renderCallWidget()}
 
             <div className="w-28 flex flex-col gap-2 mt-4 border-t border-slate-800 pt-4">
@@ -492,10 +540,14 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
              </div>
 
              {/* LOCAL CAMERA (PiP) */}
-             {callStatus === 'connected' && !cameraOffEndTime && (
+             {/* Show if Connected OR Monitoring Mode is Active */}
+             {(callStatus === 'connected' || isMonitoringMode) && !cameraOffEndTime && (
                  <div className="absolute bottom-4 right-4 w-48 aspect-video rounded-lg overflow-hidden border-2 border-slate-600 shadow-2xl z-30 bg-black">
                      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                     {adminStream && <div className="absolute bottom-0 left-0 w-full bg-black/60 text-white text-[10px] text-center py-0.5 backdrop-blur-sm">自分</div>}
+                     <div className="absolute bottom-0 left-0 w-full bg-black/60 text-white text-[10px] text-center py-0.5 backdrop-blur-sm flex justify-center items-center gap-1">
+                         {isMonitoringMode && <span className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></span>}
+                         <span>自分 {isMonitoringMode ? '(監視待機中)' : ''}</span>
+                     </div>
                  </div>
              )}
              

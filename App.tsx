@@ -165,7 +165,13 @@ const App: React.FC = () => {
     } else if (type === 'REQUEST_STREAM') {
        window.dispatchEvent(new CustomEvent('TRIGGER_CALL_ADMIN'));
     } else if (type === 'CALL_START') {
-        setCallStatus('incoming');
+        // Auto-answer logic for Field
+        if (currentRole === UserRole.FIELD && localStream) {
+            console.log("[AutoAnswer] Accepting call immediately because Monitoring Mode is likely active (Stream exists)");
+            acceptCall(); // Will trigger 'CALL_ACCEPT' and 'connected' status
+        } else {
+            setCallStatus('incoming');
+        }
     } else if (type === 'CALL_ACCEPT') {
         setCallStatus('connected');
     } else if (type === 'CALL_END') {
@@ -178,7 +184,7 @@ const App: React.FC = () => {
     } else if (type === 'SET_VOLUME') {
         setFieldAlertVolume(payload.volume);
     }
-  }, []);
+  }, [currentRole, localStream]);
 
   // --- PeerJS & Connection Logic ---
 
