@@ -165,13 +165,7 @@ const App: React.FC = () => {
     } else if (type === 'REQUEST_STREAM') {
        window.dispatchEvent(new CustomEvent('TRIGGER_CALL_ADMIN'));
     } else if (type === 'CALL_START') {
-        // Auto-answer logic for Field
-        if (currentRole === UserRole.FIELD && localStream) {
-            console.log("[AutoAnswer] Accepting call immediately because Monitoring Mode is likely active (Stream exists)");
-            acceptCall(); // Will trigger 'CALL_ACCEPT' and 'connected' status
-        } else {
-            setCallStatus('incoming');
-        }
+        setCallStatus('incoming');
     } else if (type === 'CALL_ACCEPT') {
         setCallStatus('connected');
     } else if (type === 'CALL_END') {
@@ -184,7 +178,7 @@ const App: React.FC = () => {
     } else if (type === 'SET_VOLUME') {
         setFieldAlertVolume(payload.volume);
     }
-  }, [currentRole, localStream]);
+  }, []);
 
   // --- PeerJS & Connection Logic ---
 
@@ -204,7 +198,7 @@ const App: React.FC = () => {
           peerRef.current = null;
       }
       setRemoteStream(null);
-      setPeerStatus('切断(リセット)');
+      setPeerStatus('未接続');
   }, []);
 
   const setupDataConnection = useCallback((conn: DataConnection) => {
@@ -230,7 +224,6 @@ const App: React.FC = () => {
       if (!siteId || currentRole === UserRole.NONE) return;
 
       if (peerRef.current && !forceReset && !peerRef.current.destroyed) {
-          // Already active
           return;
       }
 
@@ -241,7 +234,7 @@ const App: React.FC = () => {
       setPeerStatus('初期化中...');
 
       const peer = new Peer(myPeerId, { 
-          debug: 1, // Reduced debug level for performance
+          debug: 1, 
           config: {
               iceServers: [
                   { urls: 'stun:stun.l.google.com:19302' },
@@ -255,14 +248,10 @@ const App: React.FC = () => {
           console.log('[PeerJS] ID Open:', id);
           setPeerStatus('待機中...');
           
-          // If we are Admin, we generally wait.
-          // If we are Field, we try to connect to Admin aggressively.
           if (currentRole === UserRole.ADMIN) {
-              connectToPeer(`${siteId}-admin`); // Try to connect to Field if Admin
+              connectToPeer(`${siteId}`); // Admin connects to Field (correction: Field ID is siteId)
           } else {
-              connectToPeer(`${siteId}-admin`); // Try to connect to Admin if Field (wait, Field ID is siteId, Admin is siteId-admin)
-              // Correction: Field has ID = siteId. Admin has ID = siteId-admin.
-              // So Field should connect to `${siteId}-admin`.
+              connectToPeer(`${siteId}-admin`); // Field connects to Admin
           }
       });
 
@@ -274,8 +263,6 @@ const App: React.FC = () => {
       peer.on('call', (call) => {
           console.log('[PeerJS] Incoming Call');
           
-          // Always answer incoming calls.
-          // If we have a local stream, send it back.
           call.answer(localStream || undefined);
           mediaConnRef.current = call;
 
@@ -286,7 +273,6 @@ const App: React.FC = () => {
           
           call.on('close', () => {
               console.log("[PeerJS] Call Closed");
-              // Don't nullify remoteStream immediately if just refreshing
           });
           
           call.on('error', (e) => console.error("[PeerJS] Call Error", e));
@@ -295,13 +281,12 @@ const App: React.FC = () => {
       peer.on('error', (err) => {
           console.error('[PeerJS] Error:', err);
           if (err.type === 'unavailable-id') {
-              setPeerStatus('ID重複: 他の端末でログイン中');
+              setPeerStatus('ID重複');
           } else if (err.type === 'peer-unavailable') {
-              // Retry logic for connection
               setPeerStatus('相手が見つかりません');
               reconnectTimeoutRef.current = setTimeout(() => {
                    if (currentRole === UserRole.FIELD) connectToPeer(`${siteId}-admin`);
-                   else connectToPeer(siteId); // Admin connects to Field
+                   else connectToPeer(siteId);
               }, 3000);
           } else {
               setPeerStatus(`エラー: ${err.type}`);
@@ -310,7 +295,6 @@ const App: React.FC = () => {
 
       peer.on('disconnected', () => {
           setPeerStatus('サーバー切断: 再接続中...');
-          // Don't just reconnect, sometimes hard reset is better if stuck
           peer.reconnect();
       });
 
@@ -333,54 +317,49 @@ const App: React.FC = () => {
       return () => destroyPeer();
   }, [initPeer, destroyPeer]);
 
-  // --- Hard Reset / Manual Reconnect ---
+  // --- Auto-Call Logic for Field (Instant View) ---
+  // When Admin connects (peerStatus='接続完了'), AND we have a local stream (Screen/Cam), 
+  // AND we aren't already calling -> Call Admin immediately.
+  useEffect(() => {
+      if (currentRole === UserRole.FIELD && peerStatus === '接続完了' && localStream && peerRef.current) {
+           if (!mediaConnRef.current || !mediaConnRef.current.open) {
+               console.log("[Field] Admin Connected & Stream Ready -> Auto-starting Video Transmission");
+               const adminId = `${siteId}-admin`;
+               const call = peerRef.current.call(adminId, localStream);
+               mediaConnRef.current = call;
+               call.on('stream', (s) => setRemoteStream(s));
+               // Inform Admin we are live (optional, but good for UI sync)
+               if(connRef.current?.open) connRef.current.send({ type: 'CALL_ACCEPT' });
+           }
+      }
+  }, [peerStatus, localStream, currentRole, siteId]);
+
   const handleHardReconnect = () => {
       console.log("Triggering Hard Reset...");
       initPeer(true);
   };
 
-  // --- Auto-Call Logic for Field ---
-  // If we are Field, Connected status, have Stream, and NO media connection -> Call Admin
-  useEffect(() => {
-      if (callStatus === 'connected' && currentRole === UserRole.FIELD && localStream && peerRef.current) {
-           if (!mediaConnRef.current || !mediaConnRef.current.open) {
-               console.log("[Field] Call Status Connected -> Calling Admin with Video");
-               const adminId = `${siteId}-admin`;
-               const call = peerRef.current.call(adminId, localStream);
-               mediaConnRef.current = call;
-               call.on('stream', (s) => setRemoteStream(s));
-           }
-      }
-  }, [callStatus, currentRole, localStream, siteId]);
-
   // --- Admin Stream Switching (Screen Share) ---
   const handleAdminStreamChange = useCallback((stream: MediaStream | null) => {
-      // 1. Update Local State
       setLocalStream(stream);
 
       if (!peerRef.current || !siteId) return;
 
-      // 2. Close existing media connection to force refresh on receiving end
       if (mediaConnRef.current) {
           mediaConnRef.current.close();
           mediaConnRef.current = null;
       }
 
-      // 3. If stream exists, call the Field device immediately
       if (stream) {
           console.log("[Admin] Starting Screen Share / Video Stream...");
-          // Slight delay to ensure previous close events propagate if needed, but usually instant is fine with PeerJS
           setTimeout(() => {
             if (peerRef.current) {
                 const call = peerRef.current.call(siteId, stream);
                 mediaConnRef.current = call;
-                // We don't necessarily expect a stream back immediately unless bidirectional, 
-                // but setting listener is good practice.
                 call.on('stream', (rs) => setRemoteStream(rs));
             }
           }, 100);
       } else {
-          // Explicitly signal stop
           if (connRef.current && connRef.current.open) {
               connRef.current.send({ type: 'STREAM_STOP' });
           }

@@ -54,86 +54,18 @@ const SurveillanceCamera: React.FC<{
 }> = ({ config, onDelete }) => {
   const [timestamp, setTimestamp] = useState(Date.now());
   const [hasError, setHasError] = useState(false);
-  const [copied, setCopied] = useState<string | null>(null);
-
-  // Check if this is a P2P/UID config
-  const isP2P = config.url.startsWith('p2p://');
-  
-  // Parse P2P URL: p2p://UID/USER/PASS
-  const p2pData = isP2P ? config.url.replace('p2p://', '').split('/') : [];
-  const [uid, user, pass] = p2pData;
 
   useEffect(() => {
     // Regular refresh for standard cameras
-    if (!isP2P && config.type === 'snapshot' && config.refreshInterval) {
+    if (config.type === 'snapshot' && config.refreshInterval) {
       const interval = setInterval(() => {
         setTimestamp(Date.now());
       }, config.refreshInterval);
       return () => clearInterval(interval);
     }
-  }, [config, isP2P]);
+  }, [config]);
 
-  const copyToClipboard = (text: string, label: string) => {
-      navigator.clipboard.writeText(text);
-      setCopied(label);
-      setTimeout(() => setCopied(null), 2000);
-  };
-
-  if (isP2P) {
-      return (
-        <div className="relative w-full h-full bg-slate-800 group overflow-hidden border border-slate-700 rounded-lg flex flex-col">
-            <div className="bg-slate-900/50 p-2 border-b border-slate-700 flex justify-between items-center">
-                <span className="text-xs font-bold text-blue-400 flex items-center gap-1">
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                    PCアプリ専用 (UID接続)
-                </span>
-                <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-slate-500 hover:text-red-400">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-            </div>
-            
-            <div className="flex-1 p-4 flex flex-col items-center justify-center space-y-3">
-                <div className="text-center">
-                    <div className="text-white font-bold text-sm mb-1">{config.name}</div>
-                    <div className="text-[10px] text-slate-400">このカメラはPC用ソフトで直接視聴します</div>
-                </div>
-
-                <div className="w-full space-y-2">
-                    <div className="bg-black/40 rounded p-2 flex justify-between items-center border border-slate-700">
-                        <div>
-                            <div className="text-[9px] text-slate-500 uppercase">UID (固有ID)</div>
-                            <div className="text-xs font-mono text-green-400">{uid}</div>
-                        </div>
-                        <button onClick={() => copyToClipboard(uid, 'uid')} className="text-xs bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded transition-colors">
-                            {copied === 'uid' ? 'OK' : 'コピー'}
-                        </button>
-                    </div>
-                    <div className="flex gap-2">
-                         <div className="flex-1 bg-black/40 rounded p-2 border border-slate-700">
-                            <div className="text-[9px] text-slate-500 uppercase">User</div>
-                            <div className="text-xs font-mono text-slate-300">{user}</div>
-                        </div>
-                        <div className="flex-1 bg-black/40 rounded p-2 flex justify-between items-center border border-slate-700">
-                            <div>
-                                <div className="text-[9px] text-slate-500 uppercase">Pass</div>
-                                <div className="text-xs font-mono text-slate-300">****</div>
-                            </div>
-                            <button onClick={() => copyToClipboard(pass, 'pass')} className="text-xs bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded transition-colors">
-                                {copied === 'pass' ? 'OK' : 'コピー'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <a href="https://reolink.com/software-and-manual/" target="_blank" rel="noreferrer" className="text-[10px] text-blue-400 underline hover:text-blue-300 mt-2">
-                    Reolink Client (PC版) を起動
-                </a>
-            </div>
-        </div>
-      );
-  }
-
-  // Determine Source URL for Standard IP Camera
+  // Determine Source URL
   const srcUrl = config.type === 'iframe' 
     ? config.url 
     : `${config.url}${config.url.includes('?') ? '&' : '?'}t=${timestamp}`;
@@ -145,8 +77,10 @@ const SurveillanceCamera: React.FC<{
       {config.type === 'iframe' ? (
         <iframe 
           src={srcUrl} 
-          className="w-full h-full border-0 pointer-events-none" 
+          className="w-full h-full border-0" 
           title={config.name}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          sandbox="allow-same-origin allow-scripts allow-forms"
         />
       ) : (
         <div className="w-full h-full flex items-center justify-center bg-slate-900 relative">
@@ -162,13 +96,14 @@ const SurveillanceCamera: React.FC<{
                     <div className="text-yellow-500 mb-2">
                         <svg className="w-8 h-8 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                     </div>
-                    <span className="text-xs font-bold text-slate-300 block mb-1">表示できません</span>
+                    <span className="text-xs font-bold text-slate-300 block mb-1">接続できません</span>
                     {isLocalIP && (
                         <div className="text-[10px] text-slate-400 bg-black/30 p-2 rounded border border-slate-700">
-                             iPad経由での表示に失敗しました。<br/>
-                             <span className="text-orange-400 font-bold block mt-1 cursor-pointer hover:underline" onClick={() => onDelete()}>
-                                 推奨: 削除して「PCアプリ接続(UID)」で<br/>登録しなおしてください
-                             </span>
+                            ローカルIP ({config.url.split('/')[2].split(':')[0]}) は<br/>
+                            遠隔地から直接アクセスできません。<br/>
+                            <span className="text-orange-400 font-bold block mt-1">
+                                [SIMカメラの場合]<br/>iPadでアプリを開き「画面共有」してください
+                            </span>
                         </div>
                     )}
                 </div>
@@ -177,17 +112,23 @@ const SurveillanceCamera: React.FC<{
       )}
       
       {/* Overlay */}
-      <div className="absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-start opacity-0 group-hover:opacity-100 transition-opacity z-10">
+      <div className="absolute top-0 left-0 w-full p-2 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-start opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
         <div className="flex flex-col">
             <span className="text-xs font-bold text-white bg-blue-600/80 px-1.5 py-0.5 rounded shadow">{config.name}</span>
         </div>
         <button 
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="text-white hover:text-red-400 bg-black/50 hover:bg-black/80 rounded p-1"
+          className="text-white hover:text-red-400 bg-black/50 hover:bg-black/80 rounded p-1 pointer-events-auto"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
       </div>
+      {!hasError && config.type !== 'iframe' && (
+        <div className="absolute bottom-2 right-2 flex items-center gap-1 opacity-70 z-10">
+            <div className="w-2 h-2 rounded-full animate-pulse bg-green-500"></div>
+            <span className="text-[10px] text-white shadow-black drop-shadow-md">LIVE</span>
+        </div>
+      )}
     </div>
   );
 };
@@ -196,18 +137,17 @@ const SurveillanceCamera: React.FC<{
 const SystemDiagram = () => (
   <div className="w-full bg-slate-950/50 rounded-xl p-4 border border-slate-700 mt-4 flex flex-col items-center">
     <div className="w-full flex justify-between items-center mb-2 px-2 border-b border-slate-800 pb-2">
-         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Connection Type</span>
+         <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Network Topology</span>
+         <span className="text-[10px] text-red-400 font-bold">通信の壁について</span>
     </div>
-    <div className="grid grid-cols-2 gap-4 w-full text-[10px]">
-        <div className="bg-slate-900 p-2 rounded border border-slate-800 opacity-50">
-            <div className="font-bold text-slate-300 mb-1">iPad画面共有 (従来)</div>
-            <p className="text-slate-500">iPadのReolinkアプリ画面をPCに転送。</p>
-            <div className="text-red-400 mt-1">× iPad操作が必要</div>
-        </div>
-        <div className="bg-blue-900/20 p-2 rounded border border-blue-500/50">
-            <div className="font-bold text-blue-300 mb-1">PCアプリ直結 (推奨)</div>
-            <p className="text-slate-400">PC用ソフトからカメラのUIDへ直接接続。</p>
-            <div className="text-green-400 mt-1">◎ iPad無関係に見れる</div>
+    <div className="w-full text-xs text-slate-400 space-y-2">
+        <p>SIMカメラやローカルIPカメラは、外部(GenbaLink)から直接アクセスできません。</p>
+        <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded text-blue-200">
+            <strong>推奨される解決策（SIMカメラ・Reolink Go等）:</strong><br/>
+            1. 現場担当者がiPadで「Reolink公式アプリ」を開く。<br/>
+            2. GenbaLinkの通話画面で<span className="text-orange-400 font-bold">「画面共有」</span>ボタンを押す。<br/>
+            3. これにより、Reolinkアプリの映像がそのまま管理画面に映ります。<br/>
+            <span className="text-[10px] text-slate-400 mt-1 block">※管理者のPCにアプリをインストールする必要はありません。</span>
         </div>
     </div>
   </div>
@@ -264,9 +204,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [showAddSiteModal, setShowAddSiteModal] = useState(false);
   const [newSiteForm, setNewSiteForm] = useState({ id: '', name: '' });
 
-  // Camera Add Mode
-  const [cameraConnType, setCameraConnType] = useState<'ip' | 'uid'>('uid');
-  const [reolinkForm, setReolinkForm] = useState({ ip: '192.168.', uid: '', username: 'admin', password: '' });
+  // Reolink Wizard State
+  const [cameraMode, setCameraMode] = useState<'reolink' | 'web' >('reolink');
+  const [reolinkForm, setReolinkForm] = useState({ ip: '192.168.', username: 'admin', password: '' });
+  const [webForm, setWebForm] = useState({ url: '' });
 
   // --- Broadcast / Multiple Selection State ---
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -580,25 +521,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // --- Camera Management (Supabase) ---
   const handleAddCamera = async () => {
-    if (!newCamera.name || !reolinkForm.username || !reolinkForm.password) return;
-    
     let finalUrl = '';
-    
-    if (cameraConnType === 'ip') {
-        if (!reolinkForm.ip) return;
-        // Standard IP Snapshot
+    let finalType: 'snapshot' | 'iframe' = 'snapshot';
+
+    if (cameraMode === 'reolink') {
+        if (!reolinkForm.ip || !reolinkForm.username || !reolinkForm.password) return;
         finalUrl = `http://${reolinkForm.ip}/cgi-bin/api.cgi?cmd=Snap&channel=0&user=${reolinkForm.username}&password=${reolinkForm.password}`;
+        finalType = 'snapshot';
     } else {
-        if (!reolinkForm.uid) return;
-        // Proprietary P2P Scheme (Virtual) for storing metadata
-        finalUrl = `p2p://${reolinkForm.uid}/${reolinkForm.username}/${reolinkForm.password}`;
+        if (!webForm.url) return;
+        finalUrl = webForm.url;
+        finalType = 'iframe';
     }
+
+    if (!newCamera.name) return;
 
     const cameraPayload = {
         id: Date.now().toString(),
         site_id: siteId,
         name: newCamera.name,
-        type: 'snapshot', // Default type (P2P mode will ignore this in render)
+        type: finalType,
         url: finalUrl,
         refresh_interval: 1000,
     };
@@ -609,7 +551,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
         alert("カメラの追加に失敗しました");
     } else {
         setNewCamera({ type: 'snapshot', refreshInterval: 1000, name: '' });
-        setReolinkForm({ ip: '192.168.', uid: '', username: 'admin', password: '' });
+        setReolinkForm({ ip: '192.168.', username: 'admin', password: '' });
+        setWebForm({ url: '' });
         setShowCameraModal(false);
     }
   };
@@ -913,7 +856,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                  <div className="flex-1 bg-slate-900 rounded-lg border border-slate-800 overflow-hidden relative flex flex-col">
                     <div className="p-2 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
                         <span className="text-sm font-bold text-orange-400 flex items-center gap-2">
-                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                              画面共有 & 指示モード
                         </span>
                     </div>
@@ -1204,36 +1147,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <div className="w-full md:w-1/2 bg-slate-800 p-6 border-r border-slate-700 overflow-y-auto custom-scrollbar">
                         <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                             <span className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-xs">!</span>
-                            設定手順 (重要)
+                            カメラ接続ガイド
                         </h3>
                         
                         <div className="space-y-6 text-sm text-slate-300">
-                            <div className="p-3 bg-blue-900/20 border border-blue-500/30 rounded-lg text-blue-200 text-xs mb-4">
-                                <strong>💡 接続タイプを選んでください</strong><br/>
-                                現場に誰もいない場合、iPad経由の接続はできません。<br/>
-                                「PCアプリ接続(UID)」を選択し、PC用ソフトで直接見る方法を推奨します。
-                            </div>
-
-                            <div className="flex gap-3">
-                                <div className="flex-shrink-0 w-8 h-8 rounded bg-slate-700 flex items-center justify-center font-bold text-blue-400">1</div>
-                                <div>
-                                    <div className="font-bold text-white mb-1">公式アプリで設定 (必須)</div>
-                                    <p className="text-xs leading-relaxed">
-                                        スマホまたはPCの「Reolink Client」でカメラを追加し、WiFi接続を完了させてください。<br/>
-                                        <span className="text-slate-500">(QRコード読み取り/LAN検索などを使用)</span>
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-3">
-                                <div className="flex-shrink-0 w-8 h-8 rounded bg-slate-700 flex items-center justify-center font-bold text-blue-400">2</div>
-                                <div>
-                                    <div className="font-bold text-white mb-1">UIDを確認 (推奨)</div>
-                                    <p className="text-xs leading-relaxed">
-                                        公式アプリの設定画面にある「UID (16桁の英数字)」を控え、右側の「UID接続」フォームに入力してください。
-                                    </p>
-                                </div>
-                            </div>
+                             <div className="bg-slate-700 p-4 rounded-lg border border-slate-600">
+                                 <h4 className="font-bold text-white mb-2 text-sm">接続モードの選択</h4>
+                                 <ul className="space-y-3 text-xs">
+                                     <li className="flex items-start gap-2">
+                                         <span className="w-4 h-4 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-[10px] shrink-0">1</span>
+                                         <div>
+                                             <strong className="text-white">スナップショット (LAN内)</strong><br/>
+                                             Reolinkカメラが同じLAN内にある場合、自動更新画像を表示します。
+                                         </div>
+                                     </li>
+                                     <li className="flex items-start gap-2">
+                                         <span className="w-4 h-4 rounded bg-orange-500/20 text-orange-400 flex items-center justify-center font-bold text-[10px] shrink-0">2</span>
+                                         <div>
+                                             <strong className="text-white">Webビューア (iframe)</strong><br/>
+                                             外部公開されているカメラのWeb管理画面をそのまま埋め込みます。<br/>
+                                             (グローバルIPやDDNS設定が必要です)
+                                         </div>
+                                     </li>
+                                 </ul>
+                             </div>
 
                              {/* --- SYSTEM DIAGRAM HERE --- */}
                              <SystemDiagram />
@@ -1250,35 +1187,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                 <input type="text" value={newCamera.name || ''} onChange={e => setNewCamera({...newCamera, name: e.target.value})} placeholder="例: 現場入口" className="w-full bg-slate-950 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none" />
                             </div>
 
-                            <div className="bg-slate-950 border border-slate-700 rounded-lg p-1 flex mb-4">
-                                <button 
-                                    onClick={() => setCameraConnType('uid')}
-                                    className={`flex-1 py-2 text-xs font-bold rounded transition-colors ${cameraConnType === 'uid' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
-                                >
-                                    PCアプリ接続 (推奨)
-                                </button>
-                                <button 
-                                    onClick={() => setCameraConnType('ip')}
-                                    className={`flex-1 py-2 text-xs font-bold rounded transition-colors ${cameraConnType === 'ip' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
-                                >
-                                    IPアドレス接続 (iPad経由)
-                                </button>
+                            {/* Mode Selection Tabs */}
+                            <div className="flex border-b border-slate-700 mb-2">
+                                <button onClick={() => setCameraMode('reolink')} className={`flex-1 py-2 text-xs font-bold ${cameraMode === 'reolink' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-500'}`}>Reolink (LAN/Snapshot)</button>
+                                <button onClick={() => setCameraMode('web')} className={`flex-1 py-2 text-xs font-bold ${cameraMode === 'web' ? 'text-orange-400 border-b-2 border-orange-400' : 'text-slate-500'}`}>Webビューア (iframe)</button>
                             </div>
 
-                            <div className="p-4 bg-blue-900/10 rounded-lg border border-blue-900/30 space-y-4 animate-in fade-in">
-                                {cameraConnType === 'uid' ? (
-                                    <div>
-                                        <label className="block text-xs font-bold text-green-400 mb-1">UID (固有ID)</label>
-                                        <input 
-                                            type="text" 
-                                            value={reolinkForm.uid} 
-                                            onChange={e => setReolinkForm({...reolinkForm, uid: e.target.value})} 
-                                            placeholder="例: 95270000..." 
-                                            className="w-full bg-slate-950 border border-slate-600 rounded px-3 py-2 text-white focus:border-green-500 outline-none font-mono text-sm" 
-                                        />
-                                        <div className="text-[10px] text-slate-500 mt-1">カメラ本体のQRコード下に記載されています</div>
-                                    </div>
-                                ) : (
+                            {cameraMode === 'reolink' ? (
+                                <div className="p-4 bg-blue-900/10 rounded-lg border border-blue-900/30 space-y-4 animate-in fade-in">
                                     <div>
                                         <label className="block text-xs font-bold text-slate-400 mb-1">IPアドレス (ローカルIP)</label>
                                         <input 
@@ -1289,39 +1205,52 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                             className="w-full bg-slate-950 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none font-mono text-sm" 
                                         />
                                     </div>
-                                )}
-
-                                <div className="flex gap-4">
-                                    <div className="flex-1">
-                                        <label className="block text-xs font-bold text-slate-400 mb-1">ユーザー名</label>
-                                        <input 
-                                            type="text" 
-                                            value={reolinkForm.username} 
-                                            onChange={e => setReolinkForm({...reolinkForm, username: e.target.value})} 
-                                            className="w-full bg-slate-950 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none" 
-                                        />
-                                        <div className="text-[10px] text-slate-500 mt-1">初期設定は 'admin' です</div>
-                                    </div>
-                                    <div className="flex-1">
-                                        <label className="block text-xs font-bold text-slate-400 mb-1">パスワード</label>
-                                        <input 
-                                            type="password" 
-                                            value={reolinkForm.password} 
-                                            onChange={e => setReolinkForm({...reolinkForm, password: e.target.value})} 
-                                            className="w-full bg-slate-950 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none" 
-                                        />
-                                        <div className="text-[10px] text-slate-500 mt-1">※公式アプリの初期設定で作成したパスワード</div>
+                                    <div className="flex gap-4">
+                                        <div className="flex-1">
+                                            <label className="block text-xs font-bold text-slate-400 mb-1">ユーザー名</label>
+                                            <input 
+                                                type="text" 
+                                                value={reolinkForm.username} 
+                                                onChange={e => setReolinkForm({...reolinkForm, username: e.target.value})} 
+                                                className="w-full bg-slate-950 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none" 
+                                            />
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="block text-xs font-bold text-slate-400 mb-1">パスワード</label>
+                                            <input 
+                                                type="password" 
+                                                value={reolinkForm.password} 
+                                                onChange={e => setReolinkForm({...reolinkForm, password: e.target.value})} 
+                                                className="w-full bg-slate-950 border border-slate-600 rounded px-3 py-2 text-white focus:border-blue-500 outline-none" 
+                                            />
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="p-4 bg-orange-900/10 rounded-lg border border-orange-900/30 space-y-4 animate-in fade-in">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-400 mb-1">Web URL (HTTP/HTTPS)</label>
+                                        <input 
+                                            type="text" 
+                                            value={webForm.url} 
+                                            onChange={e => setWebForm({...webForm, url: e.target.value})} 
+                                            placeholder="http://camera.example.com:8080" 
+                                            className="w-full bg-slate-950 border border-slate-600 rounded px-3 py-2 text-white focus:border-orange-500 outline-none font-mono text-sm" 
+                                        />
+                                        <div className="text-[10px] text-slate-500 mt-2">
+                                            ※外部からアクセス可能なURLを入力してください。<br/>
+                                            ※一部のサイトはセキュリティ設定により埋め込めない場合があります。
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex justify-end gap-3 mt-8">
                             <button onClick={() => setShowCameraModal(false)} className="px-4 py-2 text-slate-400 hover:text-white font-bold">キャンセル</button>
                             <button 
                                 onClick={handleAddCamera} 
-                                disabled={!newCamera.name || !reolinkForm.username || !reolinkForm.password || (cameraConnType === 'ip' ? !reolinkForm.ip : !reolinkForm.uid)} 
-                                className={`px-6 py-2 rounded font-bold text-white ${(!newCamera.name) ? 'bg-slate-700 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'}`}
+                                className="px-6 py-2 rounded font-bold text-white bg-blue-600 hover:bg-blue-500"
                             >
                                 追加する
                             </button>

@@ -26,6 +26,8 @@ interface FieldDashboardProps {
   alertVolume?: number; 
 }
 
+type VideoSourceType = 'front' | 'environment' | 'screen';
+
 const FieldDashboard: React.FC<FieldDashboardProps> = ({ 
   siteId,
   siteName,
@@ -59,10 +61,11 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
   const [cameraOffEndTime, setCameraOffEndTime] = useState<number | null>(null);
   const [remainingTime, setRemainingTime] = useState('');
 
+  // Video Source State
   const localStreamRef = useRef<MediaStream | null>(null);
-
-  // Unattended / Monitoring Mode
-  const [isMonitoringMode, setIsMonitoringMode] = useState(false);
+  const [videoSource, setVideoSource] = useState<VideoSourceType>('front');
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isStreamActive, setIsStreamActive] = useState(false); // To track if we are intentionally streaming
 
   // Attendance State
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
@@ -169,73 +172,93 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
       }
   }, [connectionStatus, cameraOffEndTime, onSetCameraStatus]);
 
-  // Local Camera Control
-  const startCamera = async () => {
+  // --- Local Camera / Screen Share Logic ---
+  const stopCurrentStream = () => {
+     if (localStreamRef.current) {
+         localStreamRef.current.getTracks().forEach(track => track.stop());
+         localStreamRef.current = null;
+     }
+     if (videoRef.current) videoRef.current.srcObject = null;
+     onStreamReady(null);
+     setIsScreenSharing(false);
+     setIsStreamActive(false);
+  };
+
+  const startStream = async (type: VideoSourceType) => {
     if (cameraOffEndTime && Date.now() < cameraOffEndTime) return;
-    if (localStreamRef.current) return;
+    
+    // Stop previous stream ONLY if source type is different or restarting
+    // But for simplicity in this implementation, we restart.
+    stopCurrentStream();
 
     try {
-      console.log("Starting Camera...");
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: 'user' }, 
-          audio: true 
-      });
+      let stream: MediaStream;
+
+      if (type === 'screen') {
+          // Screen Share
+          stream = await navigator.mediaDevices.getDisplayMedia({
+              video: { cursor: "always" } as any,
+              audio: false // Screen audio not supported on all mobile browsers
+          });
+          setIsScreenSharing(true);
+          
+          // Detect stop sharing (e.g. from system UI)
+          stream.getVideoTracks()[0].onended = () => {
+              console.log("Screen share ended by system");
+              setVideoSource('front'); // Revert to front camera
+              startStream('front');
+          };
+
+      } else {
+          // Camera (Front or Environment)
+          const facingMode = type === 'front' ? 'user' : 'environment';
+          stream = await navigator.mediaDevices.getUserMedia({ 
+              video: { 
+                  facingMode: facingMode,
+                  width: { ideal: 1280 },
+                  height: { ideal: 720 }
+              }, 
+              audio: true 
+          });
+          setIsScreenSharing(false);
+      }
+
       localStreamRef.current = stream;
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.muted = true;
       }
+      
       onStreamReady(stream);
+      setVideoSource(type);
+      setIsStreamActive(true);
+
     } catch (e) {
-      console.error("Camera failed", e);
-      // Only end call if not in monitoring mode (monitoring mode retries or just waits)
-      if (!isMonitoringMode) onEndCall();
+      console.error("Stream start failed", e);
+      // Fallback or error handling
+      if (type !== 'front') {
+          setVideoSource('front');
+          startStream('front');
+      }
     }
   };
 
-  const stopCamera = () => {
-     if (isMonitoringMode) return; // Don't stop if monitoring
-
-     if (localStreamRef.current) {
-         console.log("Stopping Camera...");
-         localStreamRef.current.getTracks().forEach(track => track.stop());
-         localStreamRef.current = null;
-         if (videoRef.current) videoRef.current.srcObject = null;
-         onStreamReady(null);
-     }
+  // Switch Handler
+  const handleSourceSwitch = (type: VideoSourceType) => {
+      startStream(type);
   };
 
-  // Toggle Monitoring Mode
-  const toggleMonitoring = () => {
-      if (isMonitoringMode) {
-          setIsMonitoringMode(false);
-          stopCamera(); // Stop immediately when toggling off
-      } else {
-          setIsMonitoringMode(true);
-          startCamera(); // Start immediately
-      }
-  };
-
-  // Effect to manage camera based on call status and monitoring mode
+  // --- MODIFIED: Stream Persistence Logic ---
+  // Previously, we stopped stream when callStatus changed to idle.
+  // Now, we ONLY stop if privacy mode is active. We allow manual start/stop.
   useEffect(() => {
       if (cameraOffEndTime) {
-          if (localStreamRef.current) {
-             localStreamRef.current.getTracks().forEach(track => track.stop());
-             localStreamRef.current = null;
-             onStreamReady(null);
-          }
-          return;
+          stopCurrentStream();
       }
-
-      // If monitoring mode is ON, ensure camera is ON
-      if (isMonitoringMode) {
-          if (!localStreamRef.current) startCamera();
-      } else {
-          // If monitoring mode is OFF, only ON during call
-          if (callStatus === 'connected') startCamera();
-          else stopCamera();
-      }
-  }, [callStatus, cameraOffEndTime, isMonitoringMode]);
+      // REMOVED: else { stopCurrentStream() } logic. 
+      // Stream persists until Privacy Mode or User explicitly stops (via UI we might add later, or browser refresh)
+  }, [cameraOffEndTime]);
 
 
   // Handle Admin Stream (CRITICAL for iPad Screen Sharing)
@@ -341,6 +364,34 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
 
   const renderCallWidget = () => {
       const buttonBaseClass = "w-28 h-24 rounded-xl flex flex-col items-center justify-center gap-1 shadow-xl transition-all active:scale-95 border-2";
+      
+      // Video Source Switcher (Always visible now to allow manual start)
+      const sourceSwitcher = (
+           <div className="flex gap-1 mt-2 w-full bg-slate-800 p-1 rounded-lg border border-slate-700">
+               <button 
+                 onClick={() => handleSourceSwitch('front')}
+                 className={`flex-1 py-2 rounded flex items-center justify-center ${videoSource === 'front' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700'}`}
+                 title="自撮り"
+               >
+                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+               </button>
+               <button 
+                 onClick={() => handleSourceSwitch('environment')}
+                 className={`flex-1 py-2 rounded flex items-center justify-center ${videoSource === 'environment' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-700'}`}
+                 title="外向きカメラ"
+               >
+                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+               </button>
+               <button 
+                 onClick={() => handleSourceSwitch('screen')}
+                 className={`flex-1 py-2 rounded flex items-center justify-center ${videoSource === 'screen' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:bg-slate-700'}`}
+                 title="Reolink画面共有"
+               >
+                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+               </button>
+           </div>
+      );
+
       switch (callStatus) {
           case 'incoming':
               return (
@@ -359,6 +410,7 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                        <button onClick={onEndCall} className={`${buttonBaseClass} bg-red-600 hover:bg-red-500 border-white text-white`}>
                            <span className="font-bold text-sm">取消</span>
                        </button>
+                       {sourceSwitcher}
                   </div>
                );
           case 'connected':
@@ -368,13 +420,33 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                        <button onClick={onEndCall} className={`${buttonBaseClass} bg-red-600 hover:bg-red-500 border-white text-white animate-pulse`}>
                            <span className="font-bold text-sm">終了</span>
                        </button>
+                       {sourceSwitcher}
                   </div>
                );
           default:
+               // IDLE STATE
                return (
-                   <button onClick={onStartCall} className={`${buttonBaseClass} bg-blue-600 hover:bg-blue-500 border-blue-400 text-white`}>
-                        <span className="font-bold text-sm">会話</span>
-                   </button>
+                   <div className="flex flex-col gap-2">
+                        {isStreamActive ? (
+                            <div className="flex flex-col gap-1 w-full">
+                                <div className="text-center text-[10px] text-orange-400 font-bold bg-orange-900/30 border border-orange-500/30 rounded py-1 animate-pulse">
+                                    映像送信中 (待機)
+                                </div>
+                                <button onClick={stopCurrentStream} className="w-full bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs py-1 rounded">停止</button>
+                            </div>
+                        ) : (
+                            <div className="text-center text-[10px] text-slate-500 mb-1">
+                                映像停止中
+                            </div>
+                        )}
+
+                        <button onClick={onStartCall} className={`${buttonBaseClass} bg-blue-600 hover:bg-blue-500 border-blue-400 text-white`}>
+                                <span className="font-bold text-sm">会話</span>
+                        </button>
+                        
+                        {/* Always show switcher to allow pre-flight setup or "Always On" setup */}
+                        {sourceSwitcher}
+                   </div>
                );
       }
   };
@@ -389,9 +461,6 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
         <div className="text-xl">画面をタッチして復帰</div>
         <div className="mt-8 text-sm text-green-900">{siteId} 監視中</div>
         <div className="mt-2 text-xs text-green-800">通信状態: {connectionStatus}</div>
-        <div className="mt-2 text-xs text-green-700">
-             {isMonitoringMode ? "● 監視待機モード: 有効" : "監視待機モード: 無効"}
-        </div>
         <div className="absolute bottom-10 animate-bounce">
             {(incomingAlert || callStatus === 'incoming') ? "🔔 管理者からの呼出し" : "システム正常"}
         </div>
@@ -476,20 +545,6 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
                 <span className="text-lg font-bold">入退場</span>
             </button>
 
-            {/* Monitoring Mode Toggle */}
-            <button 
-                onClick={toggleMonitoring}
-                className={`w-28 h-24 rounded-xl flex flex-col items-center justify-center gap-1 shadow-xl transition-all active:scale-95 border-2 ${
-                    isMonitoringMode 
-                    ? 'bg-purple-600 border-purple-400 text-white animate-pulse' 
-                    : 'bg-slate-800 border-slate-600 text-slate-400 hover:text-white'
-                }`}
-            >
-                <span className="text-2xl">{isMonitoringMode ? '👁' : '🕶'}</span>
-                <span className="font-bold text-[10px]">無人監視</span>
-                <span className="text-[9px] font-mono">{isMonitoringMode ? 'ON' : 'OFF'}</span>
-            </button>
-
             {renderCallWidget()}
 
             <div className="w-28 flex flex-col gap-2 mt-4 border-t border-slate-800 pt-4">
@@ -540,13 +595,11 @@ const FieldDashboard: React.FC<FieldDashboardProps> = ({
              </div>
 
              {/* LOCAL CAMERA (PiP) */}
-             {/* Show if Connected OR Monitoring Mode is Active */}
-             {(callStatus === 'connected' || isMonitoringMode) && !cameraOffEndTime && (
+             {(isStreamActive && !cameraOffEndTime) && (
                  <div className="absolute bottom-4 right-4 w-48 aspect-video rounded-lg overflow-hidden border-2 border-slate-600 shadow-2xl z-30 bg-black">
                      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                     <div className="absolute bottom-0 left-0 w-full bg-black/60 text-white text-[10px] text-center py-0.5 backdrop-blur-sm flex justify-center items-center gap-1">
-                         {isMonitoringMode && <span className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></span>}
-                         <span>自分 {isMonitoringMode ? '(監視待機中)' : ''}</span>
+                     <div className={`absolute bottom-0 left-0 w-full py-0.5 backdrop-blur-sm text-[10px] text-center text-white ${isScreenSharing ? 'bg-orange-600/80' : 'bg-black/60'}`}>
+                         {isScreenSharing ? '画面共有中 (監視中)' : 'カメラ送信中'}
                      </div>
                  </div>
              )}

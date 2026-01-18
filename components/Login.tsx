@@ -514,7 +514,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                              <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col items-center text-center">
                                  <div className="w-12 h-12 bg-blue-900/50 rounded-full flex items-center justify-center mb-2">
-                                     <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                                     <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                                  </div>
                                  <div className="font-bold text-white mb-1">管理者 (PC)</div>
                                  <p className="text-xs text-slate-400">オフィスから各現場をモニタリング。<br/>システム管理ボタンからログイン可能。</p>
@@ -681,28 +681,37 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         </h3>
                         <div className="space-y-4">
                             <div className="bg-yellow-900/20 border border-yellow-500/30 p-4 rounded-lg text-sm text-yellow-200">
-                                <strong>⚠️ iPadを介さず見たい場合</strong><br/>
-                                現場に誰もいない場合、iPadの画面共有は使えません。<br/>
-                                そのため、<strong>「PCアプリ接続 (UID)」</strong>モードでカメラを登録し、PC用の監視ソフトで直接見ることを強く推奨します。
+                                <strong>⚠️ 通信の制限について</strong><br/>
+                                ポータブルWiFiを使用している場合、外部カメラのローカルIP (例: 192.168.x.x) はインターネット経由で直接見ることができません。<br/>
+                                そのため、以下の手順で<strong>「画面共有」</strong>を利用して確認します。
                             </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                                    <div className="font-bold text-blue-400 mb-2">A. iPad画面共有 (従来)</div>
-                                    <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
-                                        <li>iPad操作が必要 (許可ボタン)</li>
-                                        <li>現場に人がいる時のみ使用可</li>
-                                        <li>設定は「IPアドレス」を使用</li>
-                                    </ul>
+
+                            <div className="flex gap-4 items-start">
+                                <div className="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center font-bold text-pink-400">1</div>
+                                <div>
+                                    <div className="font-bold text-white">iPadにReolinkアプリを入れる</div>
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        AppStoreから「Reolink」公式アプリをインストールし、iPad上でカメラ映像が見えるように設定します。
+                                    </p>
                                 </div>
-                                <div className="bg-slate-800 p-4 rounded-xl border-2 border-green-500/50">
-                                    <div className="font-bold text-green-400 mb-2">B. PCアプリ直結 (推奨)</div>
-                                    <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
-                                        <li>iPadの状態に関係なく常時見れる</li>
-                                        <li>高画質・安定</li>
-                                        <li>設定は「UID」を使用</li>
-                                        <li>GenbaLink上にはUIDが表示される</li>
-                                    </ul>
+                            </div>
+                            <div className="flex gap-4 items-start">
+                                <div className="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center font-bold text-pink-400">2</div>
+                                <div>
+                                    <div className="font-bold text-white">PCから「画面共有」をリクエスト</div>
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        管理者はPCのコンソールで「画面共有」ボタンを押し、iPadの画面をPCに映すように指示します。<br/>
+                                        <span className="text-slate-500">(※双方向の映像送信はできません。iPadの画面がそのままPCに映ります)</span>
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex gap-4 items-start">
+                                <div className="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center font-bold text-pink-400">3</div>
+                                <div>
+                                    <div className="font-bold text-white">iPadでアプリを開く</div>
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        現場担当者がiPadでReolinkアプリを開けば、その映像がそのまま管理者のPCにも表示されます。
+                                    </p>
                                 </div>
                             </div>
                         </div>
