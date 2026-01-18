@@ -514,7 +514,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                              <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col items-center text-center">
                                  <div className="w-12 h-12 bg-blue-900/50 rounded-full flex items-center justify-center mb-2">
-                                     <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                                     <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                                  </div>
                                  <div className="font-bold text-white mb-1">管理者 (PC)</div>
                                  <p className="text-xs text-slate-400">オフィスから各現場をモニタリング。<br/>システム管理ボタンからログイン可能。</p>
@@ -671,6 +671,59 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             必要な情報：<br/>
                             1. 現場名 (例: 佐藤邸新築工事)<br/>
                             2. 現場ID (例: GENBA-005) ※iPadのログインIDになります
+                        </div>
+                    </section>
+
+                    {/* 6. Initial Setup Guide */}
+                    <section>
+                        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2 border-l-4 border-pink-500 pl-3">
+                            6. 初期セットアップ手順 (WiFi・カメラ)
+                        </h3>
+                        <div className="space-y-4">
+                            <div className="flex gap-4 items-start">
+                                <div className="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center font-bold text-pink-400">1</div>
+                                <div>
+                                    <div className="font-bold text-white">ポータブルWiFiの電源ON</div>
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        ルーターの電源を入れ、背面に記載されている<strong>SSID</strong>と<strong>パスワード</strong>を確認します。
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex gap-4 items-start">
+                                <div className="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center font-bold text-pink-400">2</div>
+                                <div>
+                                    <div className="font-bold text-white">iPadを接続</div>
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        iPadの「設定」＞「Wi-Fi」を開き、手順1のSSIDを選択してパスワードを入力します。<br/>
+                                        <span className="text-yellow-500">※必ずこのWiFiに接続してください。</span>
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex gap-4 items-start">
+                                <div className="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center font-bold text-pink-400">3</div>
+                                <div>
+                                    <div className="font-bold text-white">カメラのWiFi設定 (重要)</div>
+                                    <div className="bg-slate-800 p-3 rounded mt-2 border border-slate-700">
+                                        <ol className="list-decimal list-inside text-xs text-slate-300 space-y-1">
+                                            <li>カメラの電源を入れます。</li>
+                                            <li>iPadで<strong>「Reolink」公式アプリ</strong>を開きます。</li>
+                                            <li>「デバイスを追加」＞「QRコードスキャン」でカメラを登録します。</li>
+                                            <li>アプリの指示に従い、<strong>カメラをポータブルWiFiに接続</strong>させます。</li>
+                                            <li>設定完了後、アプリ内の「ネットワーク情報」で<strong>IPアドレス</strong> (例: 192.168.xxx.xxx) をメモします。</li>
+                                        </ol>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex gap-4 items-start">
+                                <div className="flex-shrink-0 w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center font-bold text-pink-400">4</div>
+                                <div>
+                                    <div className="font-bold text-white">GenbaLinkへ登録</div>
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        管理者PCからGenbaLinkにログインし、対象現場の「+ カメラを追加」ボタンを押します。<br/>
+                                        手順3でメモした<strong>IPアドレス</strong>と、設定したユーザー名・パスワードを入力して完了です。
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </section>
 
